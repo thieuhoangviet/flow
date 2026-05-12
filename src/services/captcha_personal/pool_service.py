@@ -600,6 +600,40 @@ class _PersonalBrowserPoolService:
         if self._token_pool_maintainer_task is None or self._token_pool_maintainer_task.done():
             self._token_pool_maintainer_task = asyncio.create_task(self._token_pool_maintainer_loop())
 
+    async def warmup_resident_tabs(
+        self,
+        project_ids: Iterable[str],
+        limit: Optional[int] = None,
+    ) -> list[str]:
+        """预热常驻标签页（分发给各 worker）"""
+        if self._closing:
+            return []
+            
+        all_warmed_slots = []
+        project_ids_list = list(project_ids)
+        if not project_ids_list:
+            return []
+            
+        async with self._worker_dispatch_lock:
+            workers = list(self._workers)
+            
+        if not workers:
+            return []
+            
+        # Simple delegation: ask each worker to warmup, distributing the limit
+        per_worker_limit = max(1, (limit or len(project_ids_list)) // len(workers))
+        
+        tasks = []
+        for worker in workers:
+            tasks.append(worker.warmup_resident_tabs(project_ids_list, limit=per_worker_limit))
+            
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in results:
+            if isinstance(res, list):
+                all_warmed_slots.extend(res)
+                
+        return all_warmed_slots
+
     async def _reclaim_pool_memory_pressure(
         self,
         *,
