@@ -1,0 +1,71 @@
+name: Build and Release EXE
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Get short commit hash and run number
+      id: vars
+      shell: bash
+      run: |
+        echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "version=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+    - name: Write Version File
+      run: |
+        echo "${{ steps.vars.outputs.version }}" > version.txt
+
+    - name: Build EXE with PyInstaller
+      run: |
+        # Build the executable. Note: nodriver needs Playwright, we can bundle it or let nodriver download it on the fly.
+        # It's usually better to just bundle static/ config/ extension/ and version.txt
+        pyinstaller --name flow2api --onefile `
+          --add-data "static;static" `
+          --add-data "config;config" `
+          --add-data "extension;extension" `
+          --add-data "version.txt;." `
+          main.py
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.vars.outputs.version }}
+        name: Flow2API Release ${{ steps.vars.outputs.version }}
+        files: dist/flow2api.exe
+        body: |
+          Auto-built standalone executable for commit ${{ steps.vars.outputs.sha_short }}.
+          Run this single file anywhere on Windows.
+          
+          **Auto-Update is supported.**
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

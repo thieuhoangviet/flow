@@ -55,7 +55,44 @@ async def get_stats(auth_data: dict = Depends(verify_admin_token)):
 async def get_system_info(auth_data: dict = Depends(verify_admin_token)):
     user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
     stats = await deps.db.get_system_info_stats(user_id=user_id)
-    return {"success": True, "info": {"total_tokens": stats["total_tokens"], "active_tokens": stats["active_tokens"], "total_credits": stats["total_credits"], "version": "1.0.0"}}
+    from ..core.updater import get_current_version
+    return {"success": True, "info": {"total_tokens": stats["total_tokens"], "active_tokens": stats["active_tokens"], "total_credits": stats["total_credits"], "version": get_current_version()}}
+
+@router.get("/api/system/token-pool")
+async def get_token_pool_status(auth_data: dict = Depends(verify_admin_token)):
+    if auth_data.get("role") != "admin":
+        return {"token_pool_enabled": False, "token_pool_status": "Không có quyền"}
+    cc = await deps.db.get_captcha_config()
+    if cc.captcha_method == "personal":
+        try:
+            from ..services.browser_captcha_personal import BrowserCaptchaService
+            svc = await BrowserCaptchaService.get_instance(deps.db)
+            return svc.get_token_pool_status()
+        except Exception as e:
+            return {"token_pool_enabled": False, "token_pool_status": f"Lỗi: {e}"}
+    return {"token_pool_enabled": False, "token_pool_status": "Không áp dụng"}
+
+@router.get("/api/admin/update/check")
+async def check_update_status(auth_data: dict = Depends(verify_admin_token)):
+    if auth_data.get("role") != "admin":
+        return {"success": False, "message": "Không có quyền"}
+    from ..core.updater import check_for_updates
+    res = await check_for_updates()
+    return {"success": True, "data": res}
+
+@router.post("/api/admin/update/perform")
+async def perform_update(request: dict, auth_data: dict = Depends(verify_admin_token)):
+    if auth_data.get("role") != "admin":
+        return {"success": False, "message": "Không có quyền"}
+    from ..core.updater import perform_update
+    download_url = request.get("download_url")
+    if not download_url:
+        return {"success": False, "message": "Thiếu download_url"}
+    
+    # We run it in a background task so we can return the response before the server restarts
+    import asyncio
+    asyncio.create_task(perform_update(download_url))
+    return {"success": True, "message": "Đang tiến hành cập nhật và khởi động lại..."}
 
 # ========== Logs ==========
 @router.get("/api/logs")

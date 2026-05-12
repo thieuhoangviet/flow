@@ -107,6 +107,37 @@
                 </div>
             </div>
 
+            <!-- Token Pool Health -->
+            <div id="tokenPoolContainer" class="hidden mb-6 rounded-lg border border-border bg-background p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <span>Trạng thái Token Pool</span>
+                        <span id="poolStatusBadge" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-gray-100 text-gray-800">Đang tải...</span>
+                    </h3>
+                    <button onclick="fetchTokenPoolStatus()" class="inline-flex items-center justify-center rounded-md border border-border px-3 py-1 text-xs hover:bg-accent">
+                        Làm mới
+                    </button>
+                </div>
+                <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+                    <div>
+                        <p class="text-xs text-muted-foreground">Sẵn sàng (Ready)</p>
+                        <p class="text-lg font-medium text-green-600" id="poolReady">-</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-muted-foreground">Đang lấy (In-flight)</p>
+                        <p class="text-lg font-medium text-blue-600" id="poolInflight">-</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-muted-foreground">Đã cấp (Dispensed)</p>
+                        <p class="text-lg font-medium text-purple-600" id="poolDispensed">-</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-muted-foreground">Cache Hit Rate</p>
+                        <p class="text-lg font-medium" id="poolHitRate">-</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Danh sách Token -->
             <div class="rounded-lg border border-border bg-background">
                 <div class="flex items-center justify-between gap-4 p-4 border-b border-border">
@@ -184,6 +215,22 @@
 
         <!-- Cấu hình he thong -->
         <div id="panelSettings" class="hidden">
+            <!-- Cập nhật Ứng dụng -->
+            <div class="mb-6 rounded-lg border border-border bg-background p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Cập nhật Phần mềm
+                </h3>
+                <div class="flex items-center gap-4">
+                    <div class="flex-1">
+                        <p class="text-sm font-medium" id="updateCurrentVersion">Phiên bản hiện tại: Đang tải...</p>
+                        <p class="text-xs text-muted-foreground mt-1" id="updateStatusText">Hệ thống sẽ tự động tải xuống bản cập nhật mới nhất, ghi đè phần mềm và khởi động lại.</p>
+                    </div>
+                    <button id="btnCheckUpdate" onclick="checkAppUpdate()" class="inline-flex items-center justify-center rounded-md border border-border bg-background hover:bg-accent h-9 px-4 text-sm font-medium transition-colors">Kiểm tra phiên bản mới</button>
+                    <button id="btnPerformUpdate" onclick="performAppUpdate()" class="hidden inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 text-sm font-medium transition-colors">Cập nhật ngay</button>
+                </div>
+            </div>
+
             <div class="grid gap-6 lg:grid-cols-2">
                 <!-- Cấu hình bao mat -->
                 <div class="rounded-lg border border-border bg-background p-6 flex flex-col">
@@ -1351,8 +1398,109 @@
 
             const detailContent=$('logDetailContent');detailContent.dataset.logId=String(log.id??'');detailContent.innerHTML=detailHtml;syncLogDetailViewState();
         }
+        // --- Token Pool Health API ---
+        let poolUpdateInterval = null;
+        async function fetchTokenPoolStatus() {
+            try {
+                const res = await apiCall('/api/system/token-pool', 'GET');
+                const badge = $('poolStatusBadge');
+                if (res && res.token_pool_enabled) {
+                    $('tokenPoolContainer').classList.remove('hidden');
+                    const st = res.token_pool_status;
+                    if (st && typeof st === 'object') {
+                        $('poolReady').textContent = st.ready_tokens;
+                        $('poolInflight').textContent = st.inflight_requests;
+                        $('poolDispensed').textContent = st.dispensed_tokens;
+                        const total = st.hit_count + st.miss_count;
+                        const hitRate = total > 0 ? ((st.hit_count / total) * 100).toFixed(1) + '%' : 'N/A';
+                        $('poolHitRate').textContent = hitRate;
+                        badge.textContent = "Hoạt động";
+                        badge.className = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-green-100 text-green-800";
+                    }
+                } else {
+                    $('tokenPoolContainer').classList.add('hidden');
+                }
+            } catch (e) {
+                console.error("Lỗi lấy Token Pool", e);
+            }
+        }
 
-        window.addEventListener('DOMContentLoaded',()=>{checkAuth();refreshTokens();loadATAutoRefreshConfig()});
+        // --- Auto Updater API ---
+        let currentAppUpdateUrl = null;
+        async function checkAppUpdate() {
+            const btn = $('btnCheckUpdate');
+            const txt = $('updateCurrentVersion');
+            const stat = $('updateStatusText');
+            const btnDo = $('btnPerformUpdate');
+            btn.disabled = true;
+            btn.textContent = "Đang kiểm tra...";
+            try {
+                const res = await apiCall('/api/admin/update/check', 'GET');
+                if (res && res.success && res.data) {
+                    if (res.data.update_available) {
+                        txt.innerHTML = `Phiên bản mới: <span class="text-primary font-bold">${res.data.latest_version}</span>`;
+                        stat.textContent = res.data.message;
+                        currentAppUpdateUrl = res.data.download_url;
+                        btnDo.classList.remove('hidden');
+                    } else {
+                        txt.textContent = res.data.message;
+                        stat.textContent = "Bạn đang ở phiên bản mới nhất.";
+                        btnDo.classList.add('hidden');
+                    }
+                } else {
+                    stat.textContent = res?.message || "Không thể kiểm tra bản cập nhật.";
+                }
+            } catch (e) {
+                stat.textContent = "Lỗi kết nối kiểm tra cập nhật.";
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Kiểm tra lại";
+            }
+        }
+
+        async function performAppUpdate() {
+            if (!currentAppUpdateUrl) return;
+            if (!confirm("Bạn có chắc chắn muốn tiến hành cập nhật? Hệ thống sẽ tải bản mới nhất, ghi đè và khởi động lại.")) return;
+            
+            const btnDo = $('btnPerformUpdate');
+            btnDo.disabled = true;
+            btnDo.textContent = "Đang tải và cài đặt...";
+            $('updateStatusText').textContent = "Vui lòng chờ, ứng dụng đang được tải về và cài đặt. Không tắt trình duyệt lúc này...";
+            
+            try {
+                const res = await apiCall('/api/admin/update/perform', 'POST', { download_url: currentAppUpdateUrl });
+                if (res && res.success) {
+                    showToast(res.message, 'success');
+                    $('updateStatusText').textContent = "Cập nhật thành công. Đang khởi động lại ứng dụng... Trang web sẽ tự động làm mới sau 10 giây.";
+                    setTimeout(() => { window.location.reload(); }, 10000);
+                } else {
+                    showToast(res?.message || "Lỗi cập nhật", 'error');
+                    btnDo.disabled = false;
+                    btnDo.textContent = "Thử lại";
+                }
+            } catch (e) {
+                showToast("Lỗi khi tiến hành cập nhật", 'error');
+                btnDo.disabled = false;
+                btnDo.textContent = "Thử lại";
+            }
+        }
+
+        function loadDashboardInitialData() {
+            checkAuth();
+            refreshTokens();
+            loadATAutoRefreshConfig();
+            fetchTokenPoolStatus();
+            poolUpdateInterval = setInterval(fetchTokenPoolStatus, 5000);
+            
+            apiCall('/api/system/info', 'GET').then(res => {
+                if(res && res.success && res.info) {
+                    const ver = res.info.version || "Không xác định";
+                    $('updateCurrentVersion').textContent = `Phiên bản hiện hành: ${ver}`;
+                }
+            }).catch(e => console.error(e));
+        }
+
+        window.addEventListener('DOMContentLoaded', loadDashboardInitialData);
     </script>
 </body>
 </html>
