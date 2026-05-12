@@ -200,6 +200,7 @@ class CaptchaConfig(BaseModel):
     personal_max_resident_tabs: int = 5  # 内置浏览器单实例共享打码标签页数量上限
     browser_personal_fresh_restart_every_n_solves: int = 10  # 成功打码多少次后清理并重启浏览器，0表示禁用
     personal_idle_tab_ttl_seconds: int = 600  # 内置浏览器标签页空闲超时(秒)
+    personal_headless: bool = True  # Personal mode headless (fully hidden browser)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -210,6 +211,7 @@ class PluginConfig(BaseModel):
     id: int = 1
     connection_token: str = ""  # 插件连接token
     auto_enable_on_update: bool = True  # 更新token时自动启用（默认开启）
+    gemini_api_key: str = ""  # API Key Gemini public cho Article to Video
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -1,6 +1,10 @@
 """FastAPI application initialization"""
+import sys
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
+
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, FileResponse, Response
+from fastapi.responses import HTMLResponse, FileResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -15,7 +19,7 @@ from .services.token_manager import TokenManager
 from .services.load_balancer import LoadBalancer
 from .services.concurrency_manager import ConcurrencyManager
 from .services.generation_handler import GenerationHandler
-from .api import routes, admin
+from src.api import routes, admin, merge, translate, dubbing, tts, routes_article
 
 
 @asynccontextmanager
@@ -202,23 +206,72 @@ app.add_middleware(
 # Include routers
 app.include_router(routes.router)
 app.include_router(admin.router)
+app.include_router(merge.router)
+app.include_router(translate.router)
+app.include_router(dubbing.router)
+app.include_router(tts.router)
+app.include_router(routes_article.router)
 
-# Static files - serve tmp directory for cached files
+# Serve tmp files with proper Content-Disposition for videos
 tmp_dir = Path(__file__).parent.parent / "tmp"
 tmp_dir.mkdir(exist_ok=True)
-app.mount("/tmp", StaticFiles(directory=str(tmp_dir)), name="tmp")
+
+@app.get("/tmp/{filepath:path}")
+async def serve_tmp_file(filepath: str):
+    """Serve cached files from tmp/ with proper headers for video downloads."""
+    file_path = (tmp_dir / filepath).resolve()
+    # Security: prevent path traversal
+    if not str(file_path).startswith(str(tmp_dir.resolve())):
+        return Response(content="Forbidden", status_code=403)
+    if not file_path.exists() or not file_path.is_file():
+        return Response(content="Not Found", status_code=404)
+    # Determine media type
+    import mimetypes
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    if not media_type:
+        # Default to video/mp4 for extensionless files in tmp (most are cached videos)
+        media_type = "video/mp4"
+    # For video files, add Content-Disposition so browser saves with proper extension
+    headers = {}
+    if media_type.startswith("video/"):
+        ext = file_path.suffix or ".mp4"
+        download_name = file_path.stem + ext
+        headers["Content-Disposition"] = f'inline; filename="{download_name}"'
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        headers=headers,
+    )
+
+@app.get("/download/tmp/{filepath:path}")
+async def download_tmp_file(filepath: str):
+    """Force-download files from tmp/ with Content-Disposition: attachment."""
+    file_path = (tmp_dir / filepath).resolve()
+    if not str(file_path).startswith(str(tmp_dir.resolve())):
+        return Response(content="Forbidden", status_code=403)
+    if not file_path.exists() or not file_path.is_file():
+        return Response(content="Not Found", status_code=404)
+    ext = file_path.suffix or ".mp4"
+    download_name = file_path.stem + ext
+    return FileResponse(
+        path=str(file_path),
+        media_type="application/octet-stream",
+        filename=download_name,
+    )
 
 # HTML routes for frontend
 static_path = Path(__file__).parent.parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_path.resolve())), name="static")
+
+@app.get("/debug/static_path")
+def debug_static():
+    return {"static_path": str(static_path), "absolute": str(static_path.resolve()), "exists": static_path.exists()}
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=RedirectResponse)
 async def index():
-    """Redirect to login page"""
-    login_file = static_path / "login.html"
-    if login_file.exists():
-        return FileResponse(str(login_file))
-    return HTMLResponse(content="<h1>Flow2API</h1><p>Frontend not found</p>", status_code=404)
+    """Redirect to manage console"""
+    return RedirectResponse(url="/manage", status_code=302)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -226,7 +279,14 @@ async def login_page():
     """Login page"""
     login_file = static_path / "login.html"
     if login_file.exists():
-        return FileResponse(str(login_file))
+        return FileResponse(
+            str(login_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
     return HTMLResponse(content="<h1>Login Page Not Found</h1>", status_code=404)
 
 
@@ -235,17 +295,49 @@ async def manage_page():
     """Management console page"""
     manage_file = static_path / "manage.html"
     if manage_file.exists():
-        return FileResponse(str(manage_file))
+        return FileResponse(
+            str(manage_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
     return HTMLResponse(content="<h1>Management Page Not Found</h1>", status_code=404)
 
 
 @app.get("/test", response_class=HTMLResponse)
 async def test_page():
-    """Model testing page"""
+    """Test dashboard page"""
     test_file = static_path / "test.html"
     if test_file.exists():
-        return FileResponse(str(test_file))
-    return HTMLResponse(content="<h1>Test Page Not Found</h1>", status_code=404)
+        return test_file.read_text(encoding="utf-8")
+    return HTMLResponse(content="test.html not found", status_code=404)
+
+@app.get("/article", response_class=HTMLResponse)
+async def article_page():
+    """Article to video dashboard page"""
+    article_file = static_path / "article.html"
+    if article_file.exists():
+        return article_file.read_text(encoding="utf-8")
+    return HTMLResponse(content="article.html not found", status_code=404)
+
+
+@app.get("/story", response_class=HTMLResponse)
+async def story_page():
+    """Story video creator page"""
+    story_file = static_path / "story.html"
+    if story_file.exists():
+        return FileResponse(
+            str(story_file),
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+    return HTMLResponse(content="<h1>Story Page Not Found</h1>", status_code=404)
 
 
 @app.get("/metrics")

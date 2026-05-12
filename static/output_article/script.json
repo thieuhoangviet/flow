@@ -1,0 +1,65 @@
+{
+  "characters": [
+    {
+      "id": "char_1",
+      "name": "Chủ bút Liam",
+      "visual_prompt": "A 48-year-old Caucasian man, slightly disheveled dark hair, sharp eyes but currently showing signs of stress and fatigue, wearing a crumpled button-down shirt and loosened tie. Cinematic lighting, close-up, hyperrealistic."
+    },
+    {
+      "id": "char_2",
+      "name": "Nữ thành viên hoàng gia Eleanor",
+      "visual_prompt": "A 32-year-old elegant Caucasian woman, with refined features, light brown hair styled neatly, wearing a sophisticated yet understated dress. Poised and dignified expression. High-key lighting, soft focus, serene atmosphere."
+    },
+    {
+      "id": "char_3",
+      "name": "Ông trùm truyền thông Hayes",
+      "visual_prompt": "A 65-year-old Caucasian man, imposing presence, bald head with grey sides, sharp suit, stern and powerful gaze. Sitting behind a large mahogany desk in a luxurious office. Dramatic low-key lighting, power posture, 4k."
+    },
+    {
+      "id": "char_4",
+      "name": "Phát ngôn viên Hoàng gia Davies",
+      "visual_prompt": "A 55-year-old Caucasian woman, professional and stoic expression, dark grey blazer, neatly tied hair, calm but firm demeanor. Standing at a podium with a royal crest in the background. Formal lighting, authoritative presence."
+    }
+  ],
+  "scenes": [
+    {
+      "scene_number": 1,
+      "character_ids": [
+        "char_1",
+        "char_2"
+      ],
+      "video_prompt": "A sequence of quick cuts: first, a blurred, paparazzi-style photo of a young elegant woman on a private vacation, then newspaper headlines flashing across the screen with angry red text, implying a scandal. Finally, a close-up on 'Chủ bút Liam' in his office, looking distraught and holding a newspaper with the blurred controversial images.",
+      "narration_text": "Sự việc đăng tải những bức ảnh nhạy cảm của một nữ thành viên hoàng gia khi đang nghỉ dưỡng riêng tư đã gây rúng động giới truyền thông. Chủ bút của một tờ báo lá cải, người đã chấp thuận việc đăng tải, phải đối mặt với áp lực lớn."
+    },
+    {
+      "scene_number": 2,
+      "character_ids": [
+        "char_1"
+      ],
+      "video_prompt": "An interior shot of 'Chủ bút Liam's' office. He is slowly packing personal items into a box, his face showing a mix of resignation and weariness. A framed photo of his family is gently placed in the box. The lighting is dim and somber.",
+      "narration_text": "Sau một thời gian bị đình chỉ công tác, vị chủ bút đã quyết định từ chức. Quyết định có hiệu lực ngay lập tức, khép lại một chương đầy sóng gió trong sự nghiệp của ông."
+    },
+    {
+      "scene_number": 3,
+      "character_ids": [
+        "char_3"
+      ],
+      "video_prompt": "A montage of angry news anchors on television screens, newspaper headlines with strong condemnations in various languages. Then, cut to 'Ông trùm truyền thông Hayes' in his opulent office, slamming his fist on his desk, his face red with fury. He gestures wildly to an unseen subordinate, giving an ultimatum.",
+      "narration_text": "Việc đăng tải các bức ảnh đã dấy lên làn sóng giận dữ trong giới truyền thông. Ông trùm truyền thông, một cổ đông lớn của tờ báo, thậm chí còn đe dọa đóng cửa hoàn toàn tòa báo vì vụ việc này."
+    },
+    {
+      "scene_number": 4,
+      "character_ids": [
+        "char_4"
+      ],
+      "video_prompt": "A formal press conference setting. 'Phát ngôn viên Hoàng gia Davies' stands at a podium, her expression stern and unwavering. She speaks clearly and forcefully into microphones, condemning the invasion of privacy. Close-up on her face, emphasizing her resolve.",
+      "narration_text": "Hoàng gia cũng đã bày tỏ thái độ giận dữ tột độ. Một phát ngôn viên của Hoàng gia đã thẳng thừng lên án hành vi này, gọi đây là sự tham lam không thể lý giải được."
+    },
+    {
+      "scene_number": 5,
+      "character_ids": [],
+      "video_prompt": "A legal document being stamped with an official seal. Then, a gavel striking a wooden block in a courtroom. A stack of confidential files on a lawyer's desk, with a newspaper headline in the background referencing 'legal order'. Emphasize the weight of legal repercussions.",
+      "narration_text": "Hậu quả pháp lý cũng không ngừng lại. Một tạp chí khác đã bị tòa án ra lệnh giao nộp mọi hình thức dữ liệu ảnh nhạy cảm trong vòng 24 giờ, nếu không sẽ phải chịu mức phạt nặng hàng ngày."
+    }
+  ]
+}

@@ -438,6 +438,18 @@ class Config:
             return 600
 
     @property
+    def personal_headless(self) -> bool:
+        """Chạy trình duyệt captcha ở chế độ ẩn hoàn toàn"""
+        value = self._config.get("captcha", {}).get("personal_headless", True)
+        return bool(value)
+
+    def set_personal_headless(self, enabled: bool):
+        """Set personal headless mode"""
+        if "captcha" not in self._config:
+            self._config["captcha"] = {}
+        self._config["captcha"]["personal_headless"] = bool(enabled)
+
+    @property
     def personal_max_resident_tabs(self) -> int:
         """内置浏览器打码单实例共享标签页上限"""
         value = self._config.get("captcha", {}).get("personal_max_resident_tabs", 5)
@@ -445,6 +457,7 @@ class Config:
             return max(1, min(50, int(value)))  # 限制在1-50之间
         except Exception:
             return 5
+
 
     @property
     def personal_project_pool_size(self) -> int:

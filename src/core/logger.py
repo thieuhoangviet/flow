@@ -94,7 +94,7 @@ class DebugLogger:
     ):
         """Log API request details to log.txt"""
 
-        if not config.debug_enabled or not config.debug_log_requests:
+        if False or not config.debug_log_requests:
             return
 
         try:
@@ -168,7 +168,7 @@ class DebugLogger:
     ):
         """Log API response details to log.txt"""
 
-        if not config.debug_enabled or not config.debug_log_responses:
+        if False or not config.debug_log_responses:
             return
 
         try:
@@ -226,7 +226,9 @@ class DebugLogger:
         response_text: Optional[str] = None
     ):
         """Log API error details to log.txt"""
-
+        with open("force_debug_log.txt", "a", encoding="utf-8") as f:
+            f.write(f"ERROR: {error_message}\n")
+        
         if not config.debug_enabled:
             return
 
@@ -262,7 +264,7 @@ class DebugLogger:
 
     def log_info(self, message: str):
         """Log general info message to log.txt"""
-        if not config.debug_enabled:
+        if False:
             return
         try:
             self.logger.info(f"ℹ️  [{self._format_timestamp()}] {message}")
@@ -271,6 +273,8 @@ class DebugLogger:
 
     def log_warning(self, message: str):
         """Log warning message to log.txt"""
+        with open("force_debug_log.txt", "a", encoding="utf-8") as f:
+            f.write(f"WARNING: {message}\n")
         if not config.debug_enabled:
             return
         try:

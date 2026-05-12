@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tạo Video Liên Tục - Flow2API</title>
+<link rel="stylesheet" href="/static/story.css?v=2">
+</head>
+<body>
+<div class="container">
+  <a href="/manage" style="display:inline-flex; align-items:center; color:#94a3b8; text-decoration:none; margin-bottom:12px; font-size:14px; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">
+    <svg style="width:16px; height:16px; margin-right:6px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>Quay lại Quản lý
+  </a>
+  <h1>🎬 Tạo Video Liên Tục</h1>
+  <p class="subtitle">Đầy đủ tính năng Google Flow • T2V / I2V / R2V / Extend • Ngang & Dọc</p>
+
+  <div class="panel">
+    <div class="row">
+      <div><label>API Key</label><input type="password" id="apiKey"></div>
+      <div><label>Model</label><select id="modelSelect"></select></div>
+      <div style="max-width:100px"><label>Thử lại</label><input type="number" id="maxRetries" value="3" min="1" max="10"></div>
+    </div>
+    <div class="opt-row">
+      <div>
+        <label style="margin-bottom:4px">Khung hình</label>
+        <div class="toggle-group">
+          <button class="toggle-btn asp-btn active" data-asp="landscape" onclick="setAspect('landscape')">🖥️ Ngang</button>
+          <button class="toggle-btn asp-btn" data-asp="portrait" onclick="setAspect('portrait')">📱 Dọc</button>
+        </div>
+      </div>
+      <div id="optDurationWrap" style="display:none">
+        <label style="margin-bottom:4px">Thời lượng</label>
+        <select id="optDuration" onchange="render()">
+          <option value="6s">6 giây</option>
+          <option value="4s">4 giây</option>
+        </select>
+      </div>
+      <div id="optTierWrap" style="display:none">
+        <label style="margin-bottom:4px">Chất lượng (Tier)</label>
+        <select id="optTier" onchange="render()">
+          <option value="fast">Fast</option>
+          <option value="ultra">Ultra</option>
+          <option value="ultra_relaxed">Ultra Relaxed</option>
+        </select>
+      </div>
+      <div id="optUpsampleWrap" style="display:none">
+        <label style="margin-bottom:4px">Upsampler</label>
+        <select id="optUpsample" onchange="render()">
+          <option value="">Không</option>
+          <option value="1080p">1080p</option>
+          <option value="4k">4K</option>
+        </select>
+      </div>
+    </div>
+    <div class="chk-row" style="margin-top:10px"><input type="checkbox" id="autoTranslate" checked><label for="autoTranslate">🌐 Tự động dịch prompt sang tiếng Anh</label></div>
+    <div class="chk-row" style="margin-top:6px"><input type="checkbox" id="autoDub"><label for="autoDub">🎙️ Tự động lồng tiếng Việt sau khi ghép</label></div>
+  </div>
+
+  <div class="panel">
+    <h3>⚡ Chế độ tạo</h3>
+    <div class="mode-tabs">
+      <div class="mode-tab active" data-mode="parallel" onclick="setMode('parallel')">🚀 Song song</div>
+      <div class="mode-tab" data-mode="noidal" onclick="setMode('noidal')">🎬 Nối dài</div>
+    </div>
+    <div class="mode-info" id="modeInfo"><b>Song song:</b> Tạo nhiều cảnh cùng lúc. <b>Nhanh nhất!</b></div>
+    <div style="max-width:200px" id="parallelCountWrap">
+      <label>Số cảnh đồng thời</label>
+      <input type="number" id="parallelCount" value="3" min="1" max="10">
+    </div>
+  </div>
+
+  <div class="panel" id="charPanel">
+    <h3 id="charPanelTitle">👤 Ảnh nhân vật tham chiếu</h3>
+    <div class="char-upload">
+      <div class="char-preview" id="charPreview" onclick="document.getElementById('charFileInput').click()">
+        <div style="color:#94a3b8;font-size:12px;text-align:center;padding:8px">Nhấp để<br>tải ảnh</div>
+      </div>
+      <div style="flex:1">
+        <label>Hoặc dán URL ảnh</label>
+        <input type="text" id="charUrl" placeholder="http://localhost:8000/tmp/xxx.png">
+        <p style="font-size:11px;color:#94a3b8;margin-top:6px">💡 Tạo ảnh ở <a href="/test" style="color:#6366f1">/test</a> → copy URL dán vào đây</p>
+      </div>
+    </div>
+    <input type="file" id="charFileInput" accept="image/*" style="display:none">
+    <div style="margin-top:14px" id="charDescWrap">
+      <label>🎭 Mô tả nhân vật <span style="color:#6366f1;font-size:11px">(tự động ghép vào prompt)</span></label>
+      <textarea id="charDesc" rows="3" placeholder="Ví dụ: A young woman with long black hair, wearing white dress..." style="margin-top:6px;font-size:13px"></textarea>
+    </div>
+    <p id="sceneImgHint" style="display:none;font-size:11px;color:#64748b;margin-top:8px;padding:8px 12px;background:#f8fafc;border-radius:6px">💡 <b>I2V:</b> Bạn có thể upload ảnh khung hình riêng cho từng cảnh bên dưới. Ảnh ở đây dùng làm mặc định.</p>
+  </div>
+
+  <div class="panel">
+    <h3>🎞️ Danh sách cảnh <span style="font-size:12px;color:#94a3b8;font-weight:400" id="sceneCount"></span></h3>
+    <div id="sceneList"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-secondary btn-sm" onclick="addScene()">+ Thêm cảnh</button>
+      <button class="btn btn-secondary btn-sm" onclick="for(let i=0;i<5;i++)addScene()">+ 5 cảnh</button>
+      <button class="btn btn-secondary btn-sm" onclick="loadSamples()">📋 Mẫu thử</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <button class="btn btn-primary" id="btnGen" style="width:100%;padding:14px;font-size:16px" onclick="startGen()">🚀 Bắt đầu tạo tất cả</button>
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    <div class="stats">
+      <span>📊 <strong id="sP">0/0</strong></span>
+      <span>✅ <strong id="sD">0</strong></span>
+      <span>❌ <strong id="sE">0</strong></span>
+      <span>🔄 <strong id="sR">0</strong></span>
+      <span>⏱️ <strong id="sT">--</strong></span>
+    </div>
+  </div>
+
+  <div class="narr-panel" id="narrPanel">
+    <h3>🎙️ Cài đặt Lồng tiếng</h3>
+    <div class="row">
+      <div><label>🚺 Giọng nữ</label><select id="narrVoiceFemale"><option value="vi-VN-HoaiMyNeural">🇻🇳 Hoài My</option></select></div>
+      <div><label>🚹 Giọng nam</label><select id="narrVoiceMale"><option value="vi-VN-NamMinhNeural">🇻🇳 Nam Minh</option></select></div>
+      <div style="max-width:160px"><label>Nhạc nền</label><input type="range" id="narrOrigVol" min="0" max="100" value="10" style="padding:4px" oninput="document.getElementById('narrOrigVolLabel').textContent=this.value+'%'"><span style="font-size:11px;color:#94a3b8" id="narrOrigVolLabel">10%</span></div>
+    </div>
+  </div>
+
+  <div class="panel result-panel" id="resPanel">
+    <h3>🎥 Kết quả</h3>
+    <div class="result-videos" id="resVids"></div>
+    <div class="merge-bar">
+      <button class="btn btn-success" onclick="mergeVideos()">🔗 Ghép & Tải</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadAll()">📥 Tải từng video</button>
+      <div class="chk-row"><input type="checkbox" id="crossfade" checked><label for="crossfade">Crossfade</label></div>
+    </div>
+    <div id="dubBtnWrap" style="display:none;margin-top:10px">
+      <button class="btn btn-sm" id="btnDubResult" onclick="dubResultVideo()" style="background:#8b5cf6;color:#fff">🎙️ Dub giọng Việt</button>
+    </div>
+    <div class="merge-status" id="mergeStatus"></div>
+  </div>
+</div>
+<script src="/static/story.js?v=7"></script>
+</body>
+</html>
