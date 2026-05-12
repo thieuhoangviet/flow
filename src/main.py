@@ -62,17 +62,14 @@ async def lifespan(app: FastAPI):
     # Initialize browser captcha service if needed
     browser_service = None
     if captcha_config.captcha_method == "personal":
-        from .services.browser_captcha_personal import (
-            BrowserCaptchaService,
-            PERSONAL_POOL_MAX_TOTAL_RESIDENT_TABS,
-            resolve_effective_browser_count,
-            resolve_effective_personal_max_resident_tabs,
-        )
+        from .services.browser_captcha_personal import BrowserCaptchaService
+        from .services.captcha_personal.pool_service import resolve_effective_browser_count, resolve_effective_personal_max_resident_tabs
+        
         browser_service = await BrowserCaptchaService.get_instance(db)
         print("✓ Browser captcha service initialized (nodriver mode)")
 
         warmup_limit = max(1, min(
-            PERSONAL_POOL_MAX_TOTAL_RESIDENT_TABS,
+            50,
             resolve_effective_browser_count(config.browser_count)
             * resolve_effective_personal_max_resident_tabs(config.personal_max_resident_tabs),
         ))
