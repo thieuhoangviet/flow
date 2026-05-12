@@ -258,7 +258,7 @@
             appendLog(`Khởi động tiến trình Article-to-Video với Link: ${url}`);
 
             // Start SSE stream
-            const authToken = localStorage.getItem('token') || '';
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('userToken') || '';
             const streamUrl = `/api/article-to-video/stream?url=${encodeURIComponent(url)}&token=${encodeURIComponent(authToken)}`;
             
             if (eventSource) eventSource.close();

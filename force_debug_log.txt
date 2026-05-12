@@ -85,3 +85,30 @@ WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 准备
 WARNING: [BrowserCaptcha] fresh browser 启动人类化预热失败 (initialize_headless_startup_warmup): startup_human_init_move:initialize_headless_startup_warmup 超时 (1.5s)
 WARNING: [BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): No web contents in the target [code: -32000]
 WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 已使用全新无状态浏览器恢复当前共享标签页 (active_slot=b1-slot-6, warmup_disabled=true)
+WARNING: [BrowserCaptcha] fresh browser 启动人类化预热失败 (initialize_headless_startup_warmup): startup_human_init_move:initialize_headless_startup_warmup 超时 (1.5s)
+WARNING: [BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): No web contents in the target [code: -32000]
+WARNING: [BrowserCaptcha] 浏览器成功打码次数达到 fresh profile 轮换阈值，后续新取码会先等待当前并发清空并完成全新无状态浏览器重启 (count=10, threshold=10, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] 执行计划中的 fresh profile 轮换重启 (project_id=717ce47c-7725-49cd-b5e6-77f43176791c, source=resident_solve_success, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 准备执行 fresh profile 浏览器冷启动
+WARNING: [BrowserCaptcha] fresh browser 启动人类化预热失败 (initialize_headless_startup_warmup): startup_human_init_move:initialize_headless_startup_warmup 超时 (1.5s)
+WARNING: [BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): No web contents in the target [code: -32000]
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 已使用全新无状态浏览器恢复当前共享标签页 (active_slot=b1-slot-2, warmup_disabled=true)
+WARNING: [BrowserCaptcha] 浏览器成功打码次数达到 fresh profile 轮换阈值，后续新取码会先等待当前并发清空并完成全新无状态浏览器重启 (count=10, threshold=10, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] 执行计划中的 fresh profile 轮换重启 (project_id=717ce47c-7725-49cd-b5e6-77f43176791c, source=resident_solve_success, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 准备执行 fresh profile 浏览器冷启动
+WARNING: [BrowserCaptcha] fresh browser 启动人类化预热失败 (initialize_headless_startup_warmup): startup_human_init_move:initialize_headless_startup_warmup 超时 (1.5s)
+WARNING: [BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): No web contents in the target [code: -32000]
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 已使用全新无状态浏览器恢复当前共享标签页 (active_slot=b1-slot-4, warmup_disabled=true)
+WARNING: [BrowserCaptcha] nodriver websocket 发送在断连后退出: ConnectionClosedError: no close frame received or sent
+WARNING: [BrowserCaptcha] 浏览器成功打码次数达到 fresh profile 轮换阈值，后续新取码会先等待当前并发清空并完成全新无状态浏览器重启 (count=10, threshold=10, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] 执行计划中的 fresh profile 轮换重启 (project_id=717ce47c-7725-49cd-b5e6-77f43176791c, source=resident_solve_success, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 准备执行 fresh profile 浏览器冷启动
+WARNING: [BrowserCaptcha] fresh browser 启动人类化预热失败 (initialize_headless_startup_warmup): startup_human_init_move:initialize_headless_startup_warmup 超时 (1.5s)
+WARNING: [BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): No web contents in the target [code: -32000]
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 已使用全新无状态浏览器恢复当前共享标签页 (active_slot=b1-slot-6, warmup_disabled=true)
+WARNING: [BrowserCaptcha] 浏览器成功打码次数达到 fresh profile 轮换阈值，后续新取码会先等待当前并发清空并完成全新无状态浏览器重启 (count=10, threshold=10, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] 执行计划中的 fresh profile 轮换重启 (project_id=717ce47c-7725-49cd-b5e6-77f43176791c, source=resident_solve_success, reason=resident:717ce47c-7725-49cd-b5e6-77f43176791c:10/10)
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 准备执行 fresh profile 浏览器冷启动
+WARNING: [BrowserCaptcha] fresh browser 启动人类化预热失败 (initialize_headless_startup_warmup): startup_human_init_move:initialize_headless_startup_warmup 超时 (1.5s)
+WARNING: [BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): No web contents in the target [code: -32000]
+WARNING: [BrowserCaptcha] project_id=717ce47c-7725-49cd-b5e6-77f43176791c 已使用全新无状态浏览器恢复当前共享标签页 (active_slot=b1-slot-8, warmup_disabled=true)
