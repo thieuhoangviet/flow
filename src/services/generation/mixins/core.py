@@ -28,6 +28,7 @@ class GenerationCoreMixin:
         stream: bool = False,
         base_url_override: Optional[str] = None,
         video_media_id: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> AsyncGenerator:
         """统一生成入口
 
@@ -91,6 +92,7 @@ class GenerationCoreMixin:
                 duration=0,
                 status_text="started",
                 progress=0,
+                user_id=user_id,
             )
 
         # 2. 选择Token
@@ -104,6 +106,7 @@ class GenerationCoreMixin:
                 reserve=False,
                 enforce_concurrency_filter=False,
                 track_pending=True,
+                user_id=user_id,
             )
         else:
             token = await self.load_balancer.select_token(
@@ -112,6 +115,7 @@ class GenerationCoreMixin:
                 reserve=False,
                 enforce_concurrency_filter=False,
                 track_pending=True,
+                user_id=user_id,
             )
         perf_trace["token_select_ms"] = int((time.time() - token_select_started_at) * 1000)
 
@@ -122,6 +126,7 @@ class GenerationCoreMixin:
                     for_image_generation=(generation_type == "image"),
                     for_video_generation=(generation_type == "video"),
                     model=model,
+                    user_id=user_id,
                 )
             if not error_msg:
                 error_msg = self._get_no_token_error_message(generation_type)
@@ -137,6 +142,7 @@ class GenerationCoreMixin:
                 log_id=request_log_state.get("id"),
                 status_text="failed",
                 progress=request_log_state.get("progress", 0),
+                user_id=user_id,
             )
             if stream:
                 yield self._create_stream_chunk(f"❌ {error_msg}\n")
@@ -257,6 +263,7 @@ class GenerationCoreMixin:
                     log_id=request_log_state.get("id"),
                     status_text="failed",
                     progress=request_log_state.get("progress", 0),
+                    user_id=user_id,
                 )
                 if not generation_result.get("error_emitted"):
                     if stream:
@@ -317,6 +324,7 @@ class GenerationCoreMixin:
                 log_id=request_log_state.get("id"),
                 status_text="completed",
                 progress=100,
+                user_id=user_id,
             )
 
         except asyncio.CancelledError:
@@ -338,6 +346,7 @@ class GenerationCoreMixin:
                 log_id=request_log_state.get("id"),
                 status_text="failed",
                 progress=request_log_state.get("progress", 0),
+                user_id=user_id,
             )
             raise
         except Exception as e:
@@ -364,6 +373,7 @@ class GenerationCoreMixin:
                 log_id=request_log_state.get("id"),
                 status_text="failed",
                 progress=request_log_state.get("progress", 0),
+                user_id=user_id,
             )
             if stream:
                 yield self._create_stream_chunk(f"❌ {error_msg}\n")

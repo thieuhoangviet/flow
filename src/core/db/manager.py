@@ -11,6 +11,7 @@ from ..models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConf
 
 
 from .mixins.base import DatabaseBaseMixin
+from .mixins.users import DatabaseUsersMixin
 from .mixins.tokens import DatabaseTokensMixin
 from .mixins.stats import DatabaseStatsMixin
 from .mixins.projects import DatabaseProjectsMixin
@@ -18,12 +19,13 @@ from .mixins.config import DatabaseConfigMixin
 from .mixins.logs import DatabaseLogsMixin
 
 class Database(
-    DatabaseBaseMixin,
+    DatabaseUsersMixin,
     DatabaseTokensMixin,
     DatabaseStatsMixin,
     DatabaseProjectsMixin,
     DatabaseConfigMixin,
-    DatabaseLogsMixin
+    DatabaseLogsMixin,
+    DatabaseBaseMixin
 ):
     """SQLite database manager"""
 

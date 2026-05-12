@@ -563,11 +563,23 @@ function renderResult(content) {
   const imgRegex = /!\[.*?\]\((.*?)\)/g;
   let match;
   while ((match = imgRegex.exec(content)) !== null) {
+    const imgUrl = match[1];
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "position:relative;margin-top:8px;";
+    
     const img = document.createElement("img");
-    img.src = match[1];
+    img.src = imgUrl;
     img.alt = "Kết quả tạo";
     img.loading = "lazy";
-    resultDiv.appendChild(img);
+    wrapper.appendChild(img);
+    
+    const dlBtn = document.createElement("a");
+    dlBtn.href = "/api/download?file=" + encodeURIComponent(imgUrl) + "&name=image_" + Date.now() + ".jpg";
+    dlBtn.textContent = "📥 Tải ảnh";
+    dlBtn.style.cssText = "display:block;margin-top:8px;padding:8px 16px;background:#7c8aff;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;text-align:center;max-width:200px;";
+    wrapper.appendChild(dlBtn);
+    
+    resultDiv.appendChild(wrapper);
   }
 
   // Extract video tags + download button
@@ -583,8 +595,7 @@ function renderResult(content) {
     video.loop = true;
     wrapper.appendChild(video);
     const dlBtn = document.createElement("a");
-    const filePath = videoUrl.includes("://") ? new URL(videoUrl).pathname : videoUrl;
-    dlBtn.href = "/api/download?file=" + encodeURIComponent(filePath) + "&name=video_" + Date.now() + ".mp4";
+    dlBtn.href = "/api/download?file=" + encodeURIComponent(videoUrl) + "&name=video_" + Date.now() + ".mp4";
     dlBtn.textContent = "📥 Tải video (.mp4)";
     dlBtn.style.cssText = "display:block;margin-top:8px;padding:8px 16px;background:#7c8aff;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;text-align:center;max-width:200px;";
     wrapper.appendChild(dlBtn);
@@ -608,21 +619,20 @@ function renderResult(content) {
   baseUrlInput.addEventListener("change", loadModels);
   apiKeyInput.addEventListener("change", loadModels);
 
-  // Auto-fill API Key from admin session if available
   const adminToken = localStorage.getItem("adminToken");
   if (adminToken) {
     try {
-      const resp = await fetch("/api/admin/config", {
+      const resp = await fetch("/api/auth/me", {
         headers: { "Authorization": `Bearer ${adminToken}` }
       });
       if (resp.ok) {
-        const cfg = await resp.json();
-        if (cfg.api_key) {
-          apiKeyInput.value = cfg.api_key;
+        const d = await resp.json();
+        if (d.api_key) {
+          document.getElementById("apiKey").value = d.api_key;
         }
       }
     } catch (e) {
-      console.warn("Không thể tự động lấy API Key:", e);
+      console.error("Lỗi tải API Key mặc định:", e);
     }
   }
 

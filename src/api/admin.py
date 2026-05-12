@@ -17,6 +17,7 @@ from . import admin_tokens
 from . import admin_config
 from . import admin_captcha
 from . import admin_plugin
+from . import admin_users
 
 router = APIRouter()
 
@@ -26,6 +27,7 @@ router.include_router(admin_tokens.router)
 router.include_router(admin_config.router)
 router.include_router(admin_captcha.router)
 router.include_router(admin_plugin.router)
+router.include_router(admin_users.router)
 
 
 def set_dependencies(tm, pm, database, cm=None):

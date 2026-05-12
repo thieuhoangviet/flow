@@ -81,9 +81,9 @@ async def generate_script(text: str, gemini_api_key: str) -> dict:
         except Exception as e:
             raise Exception(f"Không thể parse JSON từ LLM: {e}")
 
-async def call_generation(handler: GenerationHandler, model: str, prompt: str, images: list = None) -> str:
+async def call_generation(handler: GenerationHandler, model: str, prompt: str, images: list = None, user_id: int = None) -> str:
     result_json = ""
-    async for chunk in handler.handle_generation(model=model, prompt=prompt, images=images, stream=False):
+    async for chunk in handler.handle_generation(model=model, prompt=prompt, images=images, stream=False, user_id=user_id):
         result_json += chunk
     
     try:
@@ -112,7 +112,7 @@ async def download_file(url: str, output_path: str):
                 async for chunk in response.aiter_bytes():
                     f.write(chunk)
 
-async def stream_article_to_video(url: str, gemini_api_key: str, output_dir: str) -> AsyncGenerator[str, None]:
+async def stream_article_to_video(url: str, gemini_api_key: str, output_dir: str, user_id: int = None) -> AsyncGenerator[str, None]:
     """Hàm chạy workflow Article-to-Video trả về dữ liệu stream SSE cho Frontend"""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -143,7 +143,7 @@ async def stream_article_to_video(url: str, gemini_api_key: str, output_dir: str
             for attempt in range(1, max_retries + 1):
                 try:
                     yield _sse_msg("log", f"Đang tạo hình ảnh cho nhân vật: {char['name']}... (Lần {attempt}/{max_retries})")
-                    result_text = await call_generation(handler, model="gemini-3.0-pro-image-landscape", prompt=char["visual_prompt"])
+                    result_text = await call_generation(handler, model="gemini-3.0-pro-image-landscape", prompt=char["visual_prompt"], user_id=user_id)
                     
                     # Check if result is an error response
                     if '"error"' in result_text:
@@ -191,7 +191,8 @@ async def stream_article_to_video(url: str, gemini_api_key: str, output_dir: str
                             handler, 
                             model="veo_3_1_i2v_s_fast_fl", 
                             prompt=scene["video_prompt"], 
-                            images=[ref_image]
+                            images=[ref_image],
+                            user_id=user_id
                         )
                     else:
                         yield _sse_msg("log", f"Đang tiến hành tạo Video cho Cảnh {scene_idx} (Text-to-Video do không có ảnh) - Lần {attempt}/{max_retries}...")
@@ -200,7 +201,8 @@ async def stream_article_to_video(url: str, gemini_api_key: str, output_dir: str
                             handler, 
                             model="veo_3_1_t2v_fast_landscape", 
                             prompt=scene["video_prompt"], 
-                            images=None
+                            images=None,
+                            user_id=user_id
                         )
                         
                     video_url = extract_url(result_text)

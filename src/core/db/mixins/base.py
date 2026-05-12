@@ -321,6 +321,23 @@ class DatabaseBaseMixin:
                     )
                 """)
 
+            # Check and create users table if missing
+            if not await self._table_exists(db, "users"):
+                print("  ✓ Creating missing table: users")
+                await db.execute("""
+                    CREATE TABLE users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT UNIQUE NOT NULL,
+                        password_hash TEXT NOT NULL,
+                        api_key TEXT UNIQUE,
+                        role TEXT DEFAULT 'user',
+                        expires_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+
             # Check and create proxy_config table if missing
             if not await self._table_exists(db, "proxy_config"):
                 print("  ✓ Creating missing table: proxy_config")
@@ -412,6 +429,7 @@ class DatabaseBaseMixin:
                     ("extension_route_key", "TEXT"),  # extension 模式路由键
                     ("ban_reason", "TEXT"),  # 禁用原因
                     ("banned_at", "TIMESTAMP"),  # 禁用时间
+                    ("owner_id", "INTEGER DEFAULT 0"), # Multi-tenant user ownership
                 ]
 
                 for col_name, col_type in columns_to_add:
@@ -430,6 +448,33 @@ class DatabaseBaseMixin:
                         print("  ✓ Added column 'error_ban_threshold' to admin_config table")
                     except Exception as e:
                         print(f"  ✗ Failed to add column 'error_ban_threshold': {e}")
+            
+            # Check and add missing columns to users table
+            if await self._table_exists(db, "users"):
+                if not await self._column_exists(db, "users", "gemini_api_key"):
+                    try:
+                        await db.execute("ALTER TABLE users ADD COLUMN gemini_api_key TEXT DEFAULT ''")
+                        print("  ✓ Added column 'gemini_api_key' to users table")
+                    except Exception as e:
+                        print(f"  ✗ Failed to add column 'gemini_api_key': {e}")
+                        
+            # Check and add owner_id to request_logs
+            if await self._table_exists(db, "request_logs"):
+                if not await self._column_exists(db, "request_logs", "owner_id"):
+                    try:
+                        await db.execute("ALTER TABLE request_logs ADD COLUMN owner_id INTEGER DEFAULT 0")
+                        print("  ✓ Added column 'owner_id' to request_logs table")
+                    except Exception as e:
+                        print(f"  ✗ Failed to add column 'owner_id' to request_logs: {e}")
+                        
+            # Check and add owner_id to projects
+            if await self._table_exists(db, "projects"):
+                if not await self._column_exists(db, "projects", "owner_id"):
+                    try:
+                        await db.execute("ALTER TABLE projects ADD COLUMN owner_id INTEGER DEFAULT 0")
+                        print("  ✓ Added column 'owner_id' to projects table")
+                    except Exception as e:
+                        print(f"  ✗ Failed to add column 'owner_id' to projects: {e}")
 
             # Check and add missing columns to proxy_config table
             if await self._table_exists(db, "proxy_config"):
@@ -578,6 +623,21 @@ class DatabaseBaseMixin:
                     banned_at TIMESTAMP
                 )
             """)
+
+            # Users table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    api_key TEXT UNIQUE,
+                    role TEXT DEFAULT 'user',
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
 
             # Projects table (新增)
             await db.execute("""

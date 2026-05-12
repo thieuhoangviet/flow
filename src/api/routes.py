@@ -84,13 +84,14 @@ async def _collect_non_stream_result(
     model: str, prompt: str, images: List[bytes],
     base_url_override: Optional[str] = None,
     video_media_id: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> str:
     handler = _ensure_generation_handler()
     result = None
     async for chunk in handler.handle_generation(
         model=model, prompt=prompt, images=images if images else None,
         stream=False, base_url_override=base_url_override,
-        video_media_id=video_media_id,
+        video_media_id=video_media_id, user_id=user_id,
     ):
         result = chunk
     if result is None:
@@ -105,13 +106,14 @@ def _build_openai_json_response(payload: Dict[str, Any]) -> JSONResponse:
 async def _iterate_openai_stream(
     normalized: NormalizedGenerationRequest,
     base_url_override: Optional[str] = None,
+    user_id: Optional[int] = None,
 ):
     handler = _ensure_generation_handler()
     async for chunk in handler.handle_generation(
         model=normalized.model, prompt=normalized.prompt,
         images=normalized.images if normalized.images else None,
         stream=True, base_url_override=base_url_override,
-        video_media_id=normalized.video_media_id,
+        video_media_id=normalized.video_media_id, user_id=user_id,
     ):
         if chunk.startswith("data: "):
             yield chunk
@@ -158,9 +160,17 @@ async def create_chat_completion(
 
         request_base_url = _get_request_base_url(raw_request)
 
+        from ..core.config import config
+        user_id = 0
+        handler = _ensure_generation_handler()
+        if api_key != config.api_key:
+            user = await handler.db.get_user_by_api_key(api_key)
+            if user:
+                user_id = user["id"]
+
         if request.stream:
             return StreamingResponse(
-                _iterate_openai_stream(normalized, request_base_url),
+                _iterate_openai_stream(normalized, request_base_url, user_id),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
             )
@@ -170,6 +180,7 @@ async def create_chat_completion(
                 normalized.model, normalized.prompt, normalized.images,
                 base_url_override=request_base_url,
                 video_media_id=normalized.video_media_id,
+                user_id=user_id,
             )
         )
         return _build_openai_json_response(payload)

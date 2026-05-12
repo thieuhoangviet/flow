@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Cá Nhân - Flow2API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes slide-up{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+        .animate-slide-up{animation:slide-up .3s ease-out}
+        .glass { background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+    <script>
+        tailwind.config={theme:{extend:{colors:{background:"#0a0a0a",foreground:"#ededed",primary:"#3b82f6",secondary:"#1f2937",destructive:"#ef4444",success:"#22c55e",warning:"#f59e0b"}}}}
+    </script>
+</head>
+<body class="h-full bg-background text-foreground antialiased" style="background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 40%), radial-gradient(circle at bottom left, rgba(147, 51, 234, 0.1), transparent 40%);">
+    <!-- Navbar -->
+    <nav class="glass sticky top-0 z-50 border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">Flow2API</span>
+                    <span class="px-2 py-1 text-xs font-semibold bg-gray-800 rounded-md text-gray-300">USER</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-300"><i class="fa-solid fa-user text-primary mr-2"></i><span id="navUsername">...</span></span>
+                    <button onclick="logout()" class="text-gray-400 hover:text-white transition-colors" title="Đăng xuất"><i class="fa-solid fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        
+        <!-- Status Alert -->
+        <div id="statusAlert" class="hidden mb-8 p-4 rounded-xl border flex items-start gap-4">
+            <i id="statusIcon" class="fa-solid fa-circle-exclamation text-xl mt-0.5"></i>
+            <div>
+                <h3 id="statusTitle" class="font-bold text-lg mb-1">...</h3>
+                <p id="statusDesc" class="text-gray-300 text-sm">...</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Account Info -->
+            <div class="glass p-6 rounded-2xl shadow-xl flex flex-col h-full">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="p-3 bg-blue-500/20 text-blue-400 rounded-xl"><i class="fa-solid fa-key text-xl"></i></div>
+                    <h2 class="text-xl font-semibold">Tài khoản & Key</h2>
+                </div>
+                <div class="space-y-4 flex-1">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">API Key của bạn</p>
+                        <div class="flex">
+                            <input type="password" id="userApiKey" readonly value="****************" class="w-full bg-gray-800/50 border border-gray-700 rounded-l-lg px-3 py-2 text-sm outline-none text-gray-300">
+                            <button onclick="copyKey()" class="bg-gray-700 hover:bg-gray-600 border-y border-r border-gray-700 rounded-r-lg px-3 text-gray-300 transition-colors" title="Copy"><i class="fa-solid fa-copy"></i></button>
+                            <button onclick="toggleKey()" class="bg-gray-700 hover:bg-gray-600 border-y border-r border-gray-700 rounded-r-lg px-3 text-gray-300 transition-colors" title="Hiện/Ẩn"><i class="fa-solid fa-eye"></i></button>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Ngày hết hạn</p>
+                        <p id="userExpire" class="font-medium text-white bg-gray-800/50 px-3 py-2 rounded-lg border border-gray-700">Đang tải...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Story Creator -->
+            <div class="glass p-6 rounded-2xl shadow-xl flex flex-col h-full hover:border-primary/50 transition-colors cursor-pointer" onclick="goTo('/story')">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="p-3 bg-purple-500/20 text-purple-400 rounded-xl"><i class="fa-solid fa-film text-xl"></i></div>
+                    <h2 class="text-xl font-semibold">Tạo Story Video</h2>
+                </div>
+                <p class="text-gray-400 text-sm mb-6 flex-1">Giao diện chuyên nghiệp để tạo video bằng Text-to-Video và Image-to-Video. Hỗ trợ đa khung hình.</p>
+                <button class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium transition-colors">Truy cập ngay</button>
+            </div>
+
+            <!-- Article Creator -->
+            <div class="glass p-6 rounded-2xl shadow-xl flex flex-col h-full hover:border-green-500/50 transition-colors cursor-pointer" onclick="goTo('/article')">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="p-3 bg-green-500/20 text-green-400 rounded-xl"><i class="fa-solid fa-newspaper text-xl"></i></div>
+                    <h2 class="text-xl font-semibold">Bài báo thành Video</h2>
+                </div>
+                <p class="text-gray-400 text-sm mb-6 flex-1">Tự động chuyển đổi link bài báo thành video thuyết minh đa nhân vật chuyên nghiệp.</p>
+                <button class="w-full py-2.5 bg-green-600 hover:bg-green-500 rounded-lg font-medium transition-colors">Truy cập ngay</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let realKey = "";
+
+        async function init() {
+            const token = localStorage.getItem('userToken');
+            const username = localStorage.getItem('userName');
+            
+            if(username) document.getElementById('navUsername').textContent = username;
+
+            if(!token) {
+                // If they have no token, check if they can get me with cookies? No, we use tokens.
+                // But wait, the login API returns no api_key if pending. Let's still fetch me, but wait... /me requires api_key dependency!
+                // Ah! If they are pending, they have no api_key! How do they call /me?
+                // They can't call /me without api_key. We should just show "Pending" based on local state.
+                showPendingState();
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }});
+                if(!res.ok) throw new Error("Unauthorized");
+                const data = await res.json();
+                
+                realKey = data.api_key;
+                
+                if(!data.expires_at) {
+                    document.getElementById('userExpire').textContent = "Không có thời hạn";
+                    showActiveState();
+                } else {
+                    const exp = new Date(data.expires_at);
+                    document.getElementById('userExpire').textContent = exp.toLocaleString('vi-VN');
+                    if(new Date() > exp) {
+                        showExpiredState();
+                    } else {
+                        showActiveState();
+                    }
+                }
+            } catch(e) {
+                localStorage.removeItem('userToken');
+                location.href = '/auth';
+            }
+        }
+
+        function showPendingState() {
+            const alert = document.getElementById('statusAlert');
+            alert.className = 'mb-8 p-4 rounded-xl border flex items-start gap-4 bg-warning/10 border-warning/50 text-warning';
+            document.getElementById('statusIcon').className = 'fa-solid fa-clock text-xl mt-0.5';
+            document.getElementById('statusTitle').textContent = 'Chờ kích hoạt Key';
+            document.getElementById('statusDesc').textContent = 'Tài khoản của bạn đã được ghi nhận. Vui lòng liên hệ Admin để mua/gia hạn Key sử dụng hệ thống.';
+            document.getElementById('userApiKey').value = "Đang chờ cấp Key...";
+            document.getElementById('userExpire').textContent = "Chưa kích hoạt";
+        }
+
+        function showExpiredState() {
+            const alert = document.getElementById('statusAlert');
+            alert.className = 'mb-8 p-4 rounded-xl border flex items-start gap-4 bg-destructive/10 border-destructive/50 text-destructive';
+            document.getElementById('statusIcon').className = 'fa-solid fa-circle-xmark text-xl mt-0.5';
+            document.getElementById('statusTitle').textContent = 'Key đã hết hạn';
+            document.getElementById('statusDesc').textContent = 'API Key của bạn đã quá hạn. Vui lòng liên hệ Admin để gia hạn tiếp tục sử dụng.';
+        }
+
+        function showActiveState() {
+            const alert = document.getElementById('statusAlert');
+            alert.className = 'mb-8 p-4 rounded-xl border flex items-start gap-4 bg-success/10 border-success/50 text-success';
+            document.getElementById('statusIcon').className = 'fa-solid fa-circle-check text-xl mt-0.5';
+            document.getElementById('statusTitle').textContent = 'Tài khoản Đang Hoạt Động';
+            document.getElementById('statusDesc').textContent = 'Bạn có thể truy cập các công cụ tạo video ngay bây giờ.';
+        }
+
+        function toggleKey() {
+            const inp = document.getElementById('userApiKey');
+            if(!realKey) return;
+            if(inp.type === 'password') {
+                inp.type = 'text'; inp.value = realKey;
+            } else {
+                inp.type = 'password'; inp.value = "****************";
+            }
+        }
+
+        function copyKey() {
+            if(!realKey) return;
+            navigator.clipboard.writeText(realKey);
+            showToast('Đã copy API Key');
+        }
+
+        function goTo(path) {
+            if(!realKey) {
+                showToast('Bạn chưa được cấp Key hợp lệ!', 'error');
+                return;
+            }
+            // For story/article, we need to pass the userToken so it knows who is calling
+            location.href = path;
+        }
+
+        function logout() {
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('userName');
+            location.href = '/auth';
+        }
+
+        function showToast(msg, type='info') {
+            // simple toast implementation
+            alert(msg);
+        }
+
+        init();
+    </script>
+</body>
+</html>

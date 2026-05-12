@@ -47,19 +47,22 @@ async def health_check():
     except Exception: return {"backend_running": True, "has_active_tokens": False}
 
 @router.get("/api/stats")
-async def get_stats(token: str = Depends(verify_admin_token)):
-    return await deps.db.get_dashboard_stats()
+async def get_stats(auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
+    return await deps.db.get_dashboard_stats(user_id=user_id)
 
 @router.get("/api/system/info")
-async def get_system_info(token: str = Depends(verify_admin_token)):
-    stats = await deps.db.get_system_info_stats()
+async def get_system_info(auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
+    stats = await deps.db.get_system_info_stats(user_id=user_id)
     return {"success": True, "info": {"total_tokens": stats["total_tokens"], "active_tokens": stats["active_tokens"], "total_credits": stats["total_credits"], "version": "1.0.0"}}
 
 # ========== Logs ==========
 @router.get("/api/logs")
-async def get_logs(limit: int = 100, token: str = Depends(verify_admin_token)):
+async def get_logs(limit: int = 100, auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
     limit = max(1, min(limit, 100))
-    logs = await deps.db.get_logs(limit=limit, include_payload=False)
+    logs = await deps.db.get_logs(limit=limit, include_payload=False, user_id=user_id)
     result = []
     for log in logs:
         raw_sc = log.get("status_code")
@@ -75,8 +78,9 @@ async def get_log_detail(log_id: int, token: str = Depends(verify_admin_token)):
     return {"id": log.get("id"), "token_id": log.get("token_id"), "token_email": log.get("token_email"), "token_username": log.get("token_username"), "operation": log.get("operation"), "status_code": log.get("status_code"), "duration": log.get("duration"), "status_text": log.get("status_text") or "", "progress": log.get("progress") or 0, "created_at": log.get("created_at"), "updated_at": log.get("updated_at"), "error_summary": _extract_error_summary(log.get("response_body")), "request_body": log.get("request_body"), "response_body": log.get("response_body")}
 
 @router.delete("/api/logs")
-async def clear_logs(token: str = Depends(verify_admin_token)):
-    try: await deps.db.clear_all_logs(); return {"success": True, "message": "所有日志已清空"}
+async def clear_logs(auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
+    try: await deps.db.clear_all_logs(user_id=user_id); return {"success": True, "message": "所有日志已清空"}
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 # ========== Proxy Config ==========

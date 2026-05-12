@@ -9,6 +9,7 @@ class Token(BaseModel):
     """Token model for Flow2API"""
 
     id: Optional[int] = None
+    owner_id: int = 0  # Multi-tenant user ownership
 
     # 认证信息 (核心)
     st: str  # Session Token (__Secure-next-auth.session-token)
@@ -53,6 +54,7 @@ class Project(BaseModel):
     """Project model for VideoFX"""
 
     id: Optional[int] = None
+    owner_id: int = 0
     project_id: str  # VideoFX项目UUID
     token_id: int  # 关联的Token ID
     project_name: str  # 项目名称
@@ -101,6 +103,7 @@ class RequestLog(BaseModel):
     """API request log"""
 
     id: Optional[int] = None
+    owner_id: int = 0
     token_id: Optional[int] = None
     operation: str
     request_body: Optional[str] = None

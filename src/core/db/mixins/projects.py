@@ -13,10 +13,10 @@ class DatabaseProjectsMixin:
         """Add a new project"""
         async with self._connect(write=True) as db:
             cursor = await db.execute("""
-                INSERT INTO projects (project_id, token_id, project_name, tool_name, is_active)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO projects (project_id, token_id, project_name, tool_name, is_active, owner_id)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (project.project_id, project.token_id, project.project_name,
-                  project.tool_name, project.is_active))
+                  project.tool_name, project.is_active, project.owner_id))
             await db.commit()
             return cursor.lastrowid
 

@@ -145,6 +145,7 @@ class LoadBalancer:
         reserve: bool = False,
         enforce_concurrency_filter: bool = True,
         track_pending: bool = False,
+        user_id: Optional[int] = None,
     ) -> Optional[Token]:
         """
         Select a token using load-aware balancing
@@ -161,17 +162,18 @@ class LoadBalancer:
             track_pending:
                 Whether to count the selected token as a queued request immediately.
                 This smooths burst distribution before the hard concurrency slot is acquired.
+            user_id: The multi-tenant user ID to filter tokens by.
 
         Returns:
             Selected token or None if no available tokens
         """
         debug_logger.log_info(
             f"[LOAD_BALANCER] 开始选择Token (图片生成={for_image_generation}, "
-            f"视频生成={for_video_generation}, 模型={model}, 预占槽位={reserve})"
+            f"视频生成={for_video_generation}, 模型={model}, 预占槽位={reserve}, user_id={user_id})"
         )
 
-        active_tokens = await self.token_manager.get_active_tokens()
-        debug_logger.log_info(f"[LOAD_BALANCER] 获取到 {len(active_tokens)} 个活跃Token")
+        active_tokens = await self.token_manager.get_active_tokens(user_id=user_id)
+        debug_logger.log_info(f"[LOAD_BALANCER] 获取到 {len(active_tokens)} 个活跃Token (user_id={user_id})")
 
         if not active_tokens:
             debug_logger.log_info(f"[LOAD_BALANCER] ❌ 没有活跃的Token")
@@ -320,9 +322,10 @@ class LoadBalancer:
         for_image_generation: bool = False,
         for_video_generation: bool = False,
         model: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> Optional[str]:
         """给出更明确的“无可用账号”原因，优先用于分辨率/tier 档位提示。"""
-        active_tokens = await self.token_manager.get_active_tokens()
+        active_tokens = await self.token_manager.get_active_tokens(user_id=user_id)
         if not active_tokens:
             return None
 

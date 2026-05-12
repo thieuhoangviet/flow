@@ -53,8 +53,9 @@ class ImportTokensRequest(BaseModel):
 def _strip(v): return v.strip() if v is not None else None
 
 @router.get("/api/tokens")
-async def get_tokens(token: str = Depends(verify_admin_token)):
-    token_rows = await deps.db.get_all_tokens_with_stats()
+async def get_tokens(auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
+    token_rows = await deps.db.get_all_tokens_with_stats(user_id=user_id)
     to_iso = lambda v: v.isoformat() if hasattr(v, "isoformat") else v
     now = datetime.now(timezone.utc)
     def ndt(v):
@@ -90,14 +91,16 @@ async def get_tokens(token: str = Depends(verify_admin_token)):
     } for r in token_rows]
 
 @router.post("/api/tokens")
-async def add_token(request: AddTokenRequest, token: str = Depends(verify_admin_token)):
+async def add_token(request: AddTokenRequest, auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
     try:
         new_token = await deps.token_manager.add_token(
             st=request.st, project_id=request.project_id, project_name=request.project_name,
             remark=request.remark, captcha_proxy_url=_strip(request.captcha_proxy_url),
             extension_route_key=_strip(request.extension_route_key),
             image_enabled=request.image_enabled, video_enabled=request.video_enabled,
-            image_concurrency=request.image_concurrency, video_concurrency=request.video_concurrency)
+            image_concurrency=request.image_concurrency, video_concurrency=request.video_concurrency,
+            owner_id=user_id)
         if deps.concurrency_manager:
             await deps.concurrency_manager.reset_token(new_token.id, image_concurrency=new_token.image_concurrency, video_concurrency=new_token.video_concurrency)
         return {"success": True, "message": "Token添加成功", "token": {"id": new_token.id, "email": new_token.email, "credits": new_token.credits, "project_id": new_token.current_project_id, "project_name": new_token.current_project_name}}
@@ -105,7 +108,7 @@ async def add_token(request: AddTokenRequest, token: str = Depends(verify_admin_
     except Exception as e: raise HTTPException(status_code=500, detail=f"添加Token失败: {str(e)}")
 
 @router.put("/api/tokens/{token_id}")
-async def update_token(token_id: int, request: UpdateTokenRequest, token: str = Depends(verify_admin_token)):
+async def update_token(token_id: int, request: UpdateTokenRequest, auth_data: dict = Depends(verify_admin_token)):
     try:
         result = await deps.token_manager.flow_client.st_to_at(request.st)
         at = result["access_token"]; expires = result.get("expires")
@@ -125,7 +128,7 @@ async def update_token(token_id: int, request: UpdateTokenRequest, token: str = 
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/tokens/{token_id}")
-async def delete_token(token_id: int, token: str = Depends(verify_admin_token)):
+async def delete_token(token_id: int, auth_data: dict = Depends(verify_admin_token)):
     try:
         await deps.token_manager.delete_token(token_id)
         if deps.concurrency_manager: await deps.concurrency_manager.remove_token(token_id)
@@ -133,22 +136,22 @@ async def delete_token(token_id: int, token: str = Depends(verify_admin_token)):
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/tokens/{token_id}/enable")
-async def enable_token(token_id: int, token: str = Depends(verify_admin_token)):
+async def enable_token(token_id: int, auth_data: dict = Depends(verify_admin_token)):
     await deps.token_manager.enable_token(token_id); return {"success": True, "message": "Token已启用"}
 
 @router.post("/api/tokens/{token_id}/disable")
-async def disable_token(token_id: int, token: str = Depends(verify_admin_token)):
+async def disable_token(token_id: int, auth_data: dict = Depends(verify_admin_token)):
     await deps.token_manager.disable_token(token_id); return {"success": True, "message": "Token已禁用"}
 
 @router.post("/api/tokens/{token_id}/refresh-credits")
-async def refresh_credits(token_id: int, token: str = Depends(verify_admin_token)):
+async def refresh_credits(token_id: int, auth_data: dict = Depends(verify_admin_token)):
     try:
         credits = await deps.token_manager.refresh_credits(token_id)
         return {"success": True, "message": "余额刷新成功", "credits": credits}
     except Exception as e: raise HTTPException(status_code=500, detail=f"刷新余额失败: {str(e)}")
 
 @router.post("/api/tokens/{token_id}/refresh-at")
-async def refresh_at(token_id: int, token: str = Depends(verify_admin_token)):
+async def refresh_at(token_id: int, auth_data: dict = Depends(verify_admin_token)):
     from ..core.logger import debug_logger; from ..core.config import config
     try:
         success = await deps.token_manager._refresh_at(token_id)
@@ -162,17 +165,18 @@ async def refresh_at(token_id: int, token: str = Depends(verify_admin_token)):
     except Exception as e: raise HTTPException(status_code=500, detail=f"刷新AT失败: {str(e)}")
 
 @router.post("/api/tokens/st2at")
-async def st_to_at(request: ST2ATRequest, token: str = Depends(verify_admin_token)):
+async def st_to_at(request: ST2ATRequest, auth_data: dict = Depends(verify_admin_token)):
     try:
         result = await deps.token_manager.flow_client.st_to_at(request.st)
         return {"success": True, "message": "ST converted to AT successfully", "access_token": result["access_token"], "email": result.get("user", {}).get("email"), "expires": result.get("expires")}
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/api/tokens/import")
-async def import_tokens(request: ImportTokensRequest, token: str = Depends(verify_admin_token)):
+async def import_tokens(request: ImportTokensRequest, auth_data: dict = Depends(verify_admin_token)):
+    user_id = 0 if auth_data["role"] == "admin" else auth_data["user"]["id"]
     added = 0; updated = 0; errors = []
     existing_by_email = {}
-    for et in await deps.token_manager.get_all_tokens():
+    for et in await deps.token_manager.get_all_tokens(user_id=user_id):
         if et.email and et.email not in existing_by_email: existing_by_email[et.email] = et
     for idx, item in enumerate(request.tokens):
         try:
@@ -195,7 +199,7 @@ async def import_tokens(request: ImportTokensRequest, token: str = Depends(verif
                     updated += 1
                 else:
                     nt = await deps.token_manager.add_token(st=st, captcha_proxy_url=_strip(item.captcha_proxy_url), extension_route_key=_strip(item.extension_route_key),
-                        image_enabled=item.image_enabled, video_enabled=item.video_enabled, image_concurrency=item.image_concurrency, video_concurrency=item.video_concurrency)
+                        image_enabled=item.image_enabled, video_enabled=item.video_enabled, image_concurrency=item.image_concurrency, video_concurrency=item.video_concurrency, owner_id=user_id)
                     if is_expired: await deps.token_manager.disable_token(nt.id)
                     existing_by_email[email] = nt; added += 1
             except Exception as e: errors.append(f"第{idx+1}项: {str(e)}")

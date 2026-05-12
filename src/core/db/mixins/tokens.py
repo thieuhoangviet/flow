@@ -16,14 +16,14 @@ class DatabaseTokensMixin:
                 INSERT INTO tokens (st, at, at_expires, email, name, remark, is_active,
                                    credits, user_paygate_tier, current_project_id, current_project_name,
                                    image_enabled, video_enabled, image_concurrency, video_concurrency,
-                                   captcha_proxy_url, extension_route_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   captcha_proxy_url, extension_route_key, owner_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (token.st, token.at, token.at_expires, token.email, token.name, token.remark,
                   token.is_active, token.credits, token.user_paygate_tier,
                   token.current_project_id, token.current_project_name,
                   token.image_enabled, token.video_enabled,
                   token.image_concurrency, token.video_concurrency,
-                  token.captcha_proxy_url, token.extension_route_key))
+                  token.captcha_proxy_url, token.extension_route_key, token.owner_id))
             await db.commit()
             token_id = cursor.lastrowid
 
@@ -65,20 +65,23 @@ class DatabaseTokensMixin:
                 return Token(**dict(row))
             return None
 
-    async def get_all_tokens(self) -> List[Token]:
-        """Get all tokens"""
+    async def get_all_tokens(self, user_id: Optional[int] = None) -> List[Token]:
+        """Get all tokens, optionally filtered by user_id"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
-            cursor = await db.execute("SELECT * FROM tokens ORDER BY created_at DESC")
+            if user_id is not None:
+                cursor = await db.execute("SELECT * FROM tokens WHERE owner_id = ? ORDER BY created_at DESC", (user_id,))
+            else:
+                cursor = await db.execute("SELECT * FROM tokens ORDER BY created_at DESC")
             rows = await cursor.fetchall()
             return [Token(**dict(row)) for row in rows]
 
-    async def get_all_tokens_with_stats(self) -> List[Dict[str, Any]]:
+    async def get_all_tokens_with_stats(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get all tokens with merged statistics in one query"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             today = self._current_stats_date()
-            cursor = await db.execute("""
+            query = """
                 SELECT
                     t.*,
                     COALESCE(ts.image_count, 0) AS image_count,
@@ -91,16 +94,25 @@ class DatabaseTokensMixin:
                     ts.last_error_at AS last_error_at
                 FROM tokens t
                 LEFT JOIN token_stats ts ON ts.token_id = t.id
-                ORDER BY t.created_at DESC
-            """, (today, today, today))
+            """
+            params = [today, today, today]
+            if user_id is not None:
+                query += " WHERE t.owner_id = ?"
+                params.append(user_id)
+            query += " ORDER BY t.created_at DESC"
+            
+            cursor = await db.execute(query, tuple(params))
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def get_active_tokens(self) -> List[Token]:
-        """Get all active tokens"""
+    async def get_active_tokens(self, user_id: Optional[int] = None) -> List[Token]:
+        """Get all active tokens, optionally filtered by user_id"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
-            cursor = await db.execute("SELECT * FROM tokens WHERE is_active = 1 ORDER BY last_used_at ASC")
+            if user_id is not None:
+                cursor = await db.execute("SELECT * FROM tokens WHERE is_active = 1 AND owner_id = ? ORDER BY last_used_at ASC", (user_id,))
+            else:
+                cursor = await db.execute("SELECT * FROM tokens WHERE is_active = 1 ORDER BY last_used_at ASC")
             rows = await cursor.fetchall()
             return [Token(**dict(row)) for row in rows]
 

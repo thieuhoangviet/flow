@@ -9,30 +9,42 @@ from ...config import DEFAULT_YESCAPTCHA_TASK_TYPE, normalize_yescaptcha_task_ty
 from ...models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConfig, GenerationConfig, CacheConfig, Project, CaptchaConfig, PluginConfig, CallLogicConfig
 
 class DatabaseStatsMixin:
-    async def get_dashboard_stats(self) -> Dict[str, int]:
+    async def get_dashboard_stats(self, user_id: Optional[int] = None) -> Dict[str, int]:
         """Get dashboard counters with aggregated SQL queries"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             today = self._current_stats_date()
 
-            token_cursor = await db.execute("""
+            token_query = """
                 SELECT
                     COUNT(*) AS total_tokens,
                     COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) AS active_tokens
                 FROM tokens
-            """)
+            """
+            token_params = []
+            if user_id is not None:
+                token_query += " WHERE owner_id = ?"
+                token_params.append(user_id)
+
+            token_cursor = await db.execute(token_query, tuple(token_params))
             token_row = await token_cursor.fetchone()
 
-            stats_cursor = await db.execute("""
+            stats_query = """
                 SELECT
-                    COALESCE(SUM(image_count), 0) AS total_images,
-                    COALESCE(SUM(video_count), 0) AS total_videos,
-                    COALESCE(SUM(error_count), 0) AS total_errors,
-                    COALESCE(SUM(CASE WHEN today_date = ? THEN today_image_count ELSE 0 END), 0) AS today_images,
-                    COALESCE(SUM(CASE WHEN today_date = ? THEN today_video_count ELSE 0 END), 0) AS today_videos,
-                    COALESCE(SUM(CASE WHEN today_date = ? THEN today_error_count ELSE 0 END), 0) AS today_errors
-                FROM token_stats
-            """, (today, today, today))
+                    COALESCE(SUM(ts.image_count), 0) AS total_images,
+                    COALESCE(SUM(ts.video_count), 0) AS total_videos,
+                    COALESCE(SUM(ts.error_count), 0) AS total_errors,
+                    COALESCE(SUM(CASE WHEN ts.today_date = ? THEN ts.today_image_count ELSE 0 END), 0) AS today_images,
+                    COALESCE(SUM(CASE WHEN ts.today_date = ? THEN ts.today_video_count ELSE 0 END), 0) AS today_videos,
+                    COALESCE(SUM(CASE WHEN ts.today_date = ? THEN ts.today_error_count ELSE 0 END), 0) AS today_errors
+                FROM token_stats ts
+            """
+            stats_params = [today, today, today]
+            if user_id is not None:
+                stats_query += " JOIN tokens t ON ts.token_id = t.id WHERE t.owner_id = ?"
+                stats_params.append(user_id)
+
+            stats_cursor = await db.execute(stats_query, tuple(stats_params))
             stats_row = await stats_cursor.fetchone()
 
             token_data = dict(token_row) if token_row else {}
@@ -49,17 +61,23 @@ class DatabaseStatsMixin:
                 "today_errors": int(stats_data.get("today_errors") or 0)
             }
 
-    async def get_system_info_stats(self) -> Dict[str, int]:
+    async def get_system_info_stats(self, user_id: Optional[int] = None) -> Dict[str, int]:
         """Get lightweight system counters used by admin dashboard"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
-            cursor = await db.execute("""
+            query = """
                 SELECT
                     COUNT(*) AS total_tokens,
                     COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0) AS active_tokens,
                     COALESCE(SUM(CASE WHEN is_active = 1 THEN credits ELSE 0 END), 0) AS total_credits
                 FROM tokens
-            """)
+            """
+            params = []
+            if user_id is not None:
+                query += " WHERE owner_id = ?"
+                params.append(user_id)
+                
+            cursor = await db.execute(query, tuple(params))
             row = await cursor.fetchone()
             data = dict(row) if row else {}
             return {

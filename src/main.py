@@ -19,7 +19,8 @@ from .services.token_manager import TokenManager
 from .services.load_balancer import LoadBalancer
 from .services.concurrency_manager import ConcurrencyManager
 from .services.generation_handler import GenerationHandler
-from src.api import routes, admin, merge, translate, dubbing, tts, routes_article
+from src.api import routes, admin, merge, translate, dubbing, tts, routes_article, routes_auth
+from .core.auth import AuthManager
 
 
 @asynccontextmanager
@@ -185,6 +186,8 @@ generation_handler = GenerationHandler(
 # Set dependencies
 routes.set_generation_handler(generation_handler)
 admin.set_dependencies(token_manager, proxy_manager, db, concurrency_manager)
+routes_auth.set_db(db)
+AuthManager.set_db(db)
 
 # Create FastAPI app
 app = FastAPI(
@@ -211,6 +214,7 @@ app.include_router(translate.router)
 app.include_router(dubbing.router)
 app.include_router(tts.router)
 app.include_router(routes_article.router)
+app.include_router(routes_auth.router)
 
 # Serve tmp files with proper Content-Disposition for videos
 tmp_dir = Path(__file__).parent.parent / "tmp"
@@ -276,7 +280,7 @@ async def index():
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page():
-    """Login page"""
+    """Admin Login page"""
     login_file = static_path / "login.html"
     if login_file.exists():
         return FileResponse(
@@ -289,6 +293,50 @@ async def login_page():
         )
     return HTMLResponse(content="<h1>Login Page Not Found</h1>", status_code=404)
 
+@app.get("/register", response_class=HTMLResponse)
+async def register_page():
+    """User Registration page"""
+    register_file = static_path / "register.html"
+    if register_file.exists():
+        return FileResponse(
+            str(register_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+    return HTMLResponse(content="<h1>Register Page Not Found</h1>", status_code=404)
+
+@app.get("/auth", response_class=HTMLResponse)
+async def auth_page():
+    """User Auth page"""
+    auth_file = static_path / "auth.html"
+    if auth_file.exists():
+        return FileResponse(
+            str(auth_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+    return HTMLResponse(content="<h1>Auth Page Not Found</h1>", status_code=404)
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page():
+    """User Dashboard page"""
+    dashboard_file = static_path / "dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(
+            str(dashboard_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+    return HTMLResponse(content="<h1>Dashboard Page Not Found</h1>", status_code=404)
 
 @app.get("/manage", response_class=HTMLResponse)
 async def manage_page():

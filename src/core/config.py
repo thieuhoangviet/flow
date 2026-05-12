@@ -496,6 +496,34 @@ class Config:
         self._config["captcha"]["personal_idle_tab_ttl_seconds"] = max(60, int(value))
 
     @property
+    def token_pool_enabled(self) -> bool:
+        return bool(self._config.get("captcha", {}).get("token_pool_enabled", False))
+
+    @property
+    def token_pool_size(self) -> int:
+        return int(self._config.get("captcha", {}).get("token_pool_size", 2))
+
+    @property
+    def token_pool_image_size(self) -> int:
+        return int(self._config.get("captcha", {}).get("token_pool_image_size", 0))
+
+    @property
+    def token_pool_video_size(self) -> int:
+        return int(self._config.get("captcha", {}).get("token_pool_video_size", 0))
+
+    @property
+    def token_pool_seed_project_id(self) -> str:
+        return str(self._config.get("captcha", {}).get("token_pool_seed_project_id", ""))
+
+    @property
+    def token_pool_wait_timeout_seconds(self) -> int:
+        return int(self._config.get("captcha", {}).get("token_pool_wait_timeout_seconds", 30))
+
+    @property
+    def token_pool_ttl_seconds(self) -> int:
+        return int(self._config.get("captcha", {}).get("token_pool_ttl_seconds", 120))
+
+    @property
     def browser_personal_fresh_restart_every_n_solves(self) -> int:
         """内置浏览器成功打码多少次后使用全新 profile 重启，0 表示禁用。"""
         value = self._config.get("captcha", {}).get("browser_personal_fresh_restart_every_n_solves", 10)

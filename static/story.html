@@ -53,7 +53,6 @@
       </div>
     </div>
     <div class="chk-row" style="margin-top:10px"><input type="checkbox" id="autoTranslate" checked><label for="autoTranslate">🌐 Tự động dịch prompt sang tiếng Anh</label></div>
-    <div class="chk-row" style="margin-top:6px"><input type="checkbox" id="autoDub"><label for="autoDub">🎙️ Tự động lồng tiếng Việt sau khi ghép</label></div>
   </div>
 
   <div class="panel">
@@ -63,9 +62,15 @@
       <div class="mode-tab" data-mode="noidal" onclick="setMode('noidal')">🎬 Nối dài</div>
     </div>
     <div class="mode-info" id="modeInfo"><b>Song song:</b> Tạo nhiều cảnh cùng lúc. <b>Nhanh nhất!</b></div>
-    <div style="max-width:200px" id="parallelCountWrap">
-      <label>Số cảnh đồng thời</label>
-      <input type="number" id="parallelCount" value="3" min="1" max="10">
+    <div style="display:flex;gap:16px;margin-top:10px" id="parallelCountWrap">
+      <div>
+        <label>Số cảnh đồng thời</label>
+        <input type="number" id="parallelCount" value="3" min="1" max="10" style="width:60px">
+      </div>
+      <div id="varCountWrap">
+        <label>Biến thể mỗi cảnh (1-4)</label>
+        <input type="number" id="varCount" value="1" min="1" max="4" style="width:60px">
+      </div>
     </div>
   </div>
 
@@ -111,15 +116,6 @@
     </div>
   </div>
 
-  <div class="narr-panel" id="narrPanel">
-    <h3>🎙️ Cài đặt Lồng tiếng</h3>
-    <div class="row">
-      <div><label>🚺 Giọng nữ</label><select id="narrVoiceFemale"><option value="vi-VN-HoaiMyNeural">🇻🇳 Hoài My</option></select></div>
-      <div><label>🚹 Giọng nam</label><select id="narrVoiceMale"><option value="vi-VN-NamMinhNeural">🇻🇳 Nam Minh</option></select></div>
-      <div style="max-width:160px"><label>Nhạc nền</label><input type="range" id="narrOrigVol" min="0" max="100" value="10" style="padding:4px" oninput="document.getElementById('narrOrigVolLabel').textContent=this.value+'%'"><span style="font-size:11px;color:#94a3b8" id="narrOrigVolLabel">10%</span></div>
-    </div>
-  </div>
-
   <div class="panel result-panel" id="resPanel">
     <h3>🎥 Kết quả</h3>
     <div class="result-videos" id="resVids"></div>
@@ -128,12 +124,9 @@
       <button class="btn btn-secondary btn-sm" onclick="downloadAll()">📥 Tải từng video</button>
       <div class="chk-row"><input type="checkbox" id="crossfade" checked><label for="crossfade">Crossfade</label></div>
     </div>
-    <div id="dubBtnWrap" style="display:none;margin-top:10px">
-      <button class="btn btn-sm" id="btnDubResult" onclick="dubResultVideo()" style="background:#8b5cf6;color:#fff">🎙️ Dub giọng Việt</button>
-    </div>
     <div class="merge-status" id="mergeStatus"></div>
   </div>
 </div>
-<script src="/static/story.js?v=7"></script>
+<script src="/static/story.js?v=10"></script>
 </body>
 </html>

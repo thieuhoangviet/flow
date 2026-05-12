@@ -13,8 +13,8 @@ class DatabaseLogsMixin:
         """Add request log and return log id"""
         async with self._connect(write=True) as db:
             cursor = await db.execute("""
-                INSERT INTO request_logs (token_id, operation, request_body, response_body, status_code, duration, status_text, progress)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO request_logs (token_id, operation, request_body, response_body, status_code, duration, status_text, progress, owner_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 log.token_id,
                 log.operation,
@@ -24,6 +24,7 @@ class DatabaseLogsMixin:
                 log.duration,
                 log.status_text or "",
                 log.progress,
+                log.owner_id,
             ))
             await db.commit()
             return cursor.lastrowid
@@ -62,7 +63,7 @@ class DatabaseLogsMixin:
             )
             await db.commit()
 
-    async def get_logs(self, limit: int = 100, token_id: Optional[int] = None, include_payload: bool = False):
+    async def get_logs(self, limit: int = 100, token_id: Optional[int] = None, include_payload: bool = False, user_id: Optional[int] = None):
         """Get request logs with token info, optionally including payload fields"""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
@@ -75,50 +76,39 @@ class DatabaseLogsMixin:
             progress_column = "rl.progress," if has_progress else "0 as progress,"
             updated_at_column = "rl.updated_at," if has_updated_at else "rl.created_at as updated_at,"
 
-            if token_id:
-                cursor = await db.execute(f"""
-                    SELECT
-                        rl.id,
-                        rl.token_id,
-                        rl.operation,
-                        {payload_columns}
-                        {response_excerpt_column}
-                        rl.status_code,
-                        rl.duration,
-                        {status_text_column}
-                        {progress_column}
-                        rl.created_at,
-                        {updated_at_column}
-                        t.email as token_email,
-                        t.name as token_username
-                    FROM request_logs rl
-                    LEFT JOIN tokens t ON rl.token_id = t.id
-                    WHERE rl.token_id = ?
-                    ORDER BY rl.created_at DESC
-                    LIMIT ?
-                """, (token_id, limit))
-            else:
-                cursor = await db.execute(f"""
-                    SELECT
-                        rl.id,
-                        rl.token_id,
-                        rl.operation,
-                        {payload_columns}
-                        {response_excerpt_column}
-                        rl.status_code,
-                        rl.duration,
-                        {status_text_column}
-                        {progress_column}
-                        rl.created_at,
-                        {updated_at_column}
-                        t.email as token_email,
-                        t.name as token_username
-                    FROM request_logs rl
-                    LEFT JOIN tokens t ON rl.token_id = t.id
-                    ORDER BY rl.created_at DESC
-                    LIMIT ?
-                """, (limit,))
+            query = f"""
+                SELECT
+                    rl.id,
+                    rl.token_id,
+                    rl.operation,
+                    {payload_columns}
+                    {response_excerpt_column}
+                    rl.status_code,
+                    rl.duration,
+                    {status_text_column}
+                    {progress_column}
+                    rl.created_at,
+                    {updated_at_column}
+                    t.email as token_email,
+                    t.name as token_username
+                FROM request_logs rl
+                LEFT JOIN tokens t ON rl.token_id = t.id
+                WHERE 1=1
+            """
+            params = []
+            
+            if token_id is not None:
+                query += " AND rl.token_id = ?"
+                params.append(token_id)
+                
+            if user_id is not None:
+                query += " AND rl.owner_id = ?"
+                params.append(user_id)
+                
+            query += " ORDER BY rl.created_at DESC LIMIT ?"
+            params.append(limit)
 
+            cursor = await db.execute(query, tuple(params))
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
@@ -155,19 +145,25 @@ class DatabaseLogsMixin:
             row = await cursor.fetchone()
             return dict(row) if row else None
 
-    async def clear_all_logs(self):
-        """Clear all request logs and reset token statistics"""
+    async def clear_all_logs(self, user_id: Optional[int] = None):
+        """Clear request logs and reset token statistics"""
         async with self._connect(write=True) as db:
-            await db.execute("DELETE FROM request_logs")
-            await db.execute("""
-                UPDATE token_stats 
-                SET image_count = 0, 
-                    video_count = 0, 
-                    error_count = 0, 
-                    today_image_count = 0, 
-                    today_video_count = 0, 
-                    today_error_count = 0, 
-                    consecutive_error_count = 0
-            """)
+            if user_id is not None:
+                await db.execute("DELETE FROM request_logs WHERE owner_id = ?", (user_id,))
+                await db.execute("""
+                    UPDATE token_stats 
+                    SET image_count = 0, video_count = 0, error_count = 0, 
+                        today_image_count = 0, today_video_count = 0, today_error_count = 0, 
+                        consecutive_error_count = 0
+                    WHERE token_id IN (SELECT id FROM tokens WHERE owner_id = ?)
+                """, (user_id,))
+            else:
+                await db.execute("DELETE FROM request_logs")
+                await db.execute("""
+                    UPDATE token_stats 
+                    SET image_count = 0, video_count = 0, error_count = 0, 
+                        today_image_count = 0, today_video_count = 0, today_error_count = 0, 
+                        consecutive_error_count = 0
+                """)
             await db.commit()
 

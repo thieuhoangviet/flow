@@ -412,25 +412,31 @@ async def download_file(file: str, name: str = "video.mp4"):
     if not abs_path and "://" in original_url:
         parsed = urlparse(original_url)
         if parsed.netloc not in ("localhost", "127.0.0.1", "localhost:8000", "127.0.0.1:8000"):
-            # Stream external URL directly
-            import httpx
-            from fastapi.responses import StreamingResponse
+            # Download external URL directly
+            from curl_cffi.requests import AsyncSession
+            from fastapi.responses import Response
+            import mimetypes
             
-            # Ensure name has .mp4 extension
-            if not name.lower().endswith(".mp4"):
-                name += ".mp4"
+            media_type, _ = mimetypes.guess_type(name)
+            if not media_type:
+                media_type = "image/jpeg" if "image" in name.lower() else "application/octet-stream"
                 
             headers = {"Content-Disposition": f'attachment; filename="{name}"'}
             
-            async def iter_external_file():
-                async with httpx.AsyncClient() as client:
-                    async with client.stream("GET", original_url) as response:
-                        if response.status_code == 200:
-                            async for chunk in response.aiter_bytes():
-                                yield chunk
-                        else:
-                            yield b""
-            return StreamingResponse(iter_external_file(), media_type="video/mp4", headers=headers)
+            try:
+                async with AsyncSession(impersonate="chrome120") as client:
+                    response = await client.get(original_url, timeout=30)
+                    if response.status_code == 200:
+                        return Response(content=response.content, media_type=media_type, headers=headers)
+                    else:
+                        return JSONResponse({"error": f"Lá»—i HTTP {response.status_code}"}, status_code=500)
+            except Exception as e:
+                import logging
+                logging.error(f"Download external file failed: {e}")
+                return JSONResponse({"error": f"Táº£i tháº¥t báº¡i: {str(e)}"}, status_code=500)
+
+    if not abs_path:
+        return JSONResponse({"error": "Invalid path"}, status_code=400)
 
     # Security: prevent path traversal
     try:
@@ -443,13 +449,14 @@ async def download_file(file: str, name: str = "video.mp4"):
     if not abs_path.exists():
         return JSONResponse({"error": f"File khÃ´ng tá»“n táº¡i: {file}"}, status_code=404)
 
-    # Ensure name has .mp4 extension
-    if not name.lower().endswith(".mp4"):
-        name += ".mp4"
+    import mimetypes
+    media_type, _ = mimetypes.guess_type(name)
+    if not media_type:
+        media_type = "video/mp4" if "video" in name.lower() else "application/octet-stream"
 
     return FR(
         path=str(abs_path),
         filename=name,
-        media_type="video/mp4",
+        media_type=media_type,
     )
 

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác thực người dùng - Flow2API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slide-up{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+        .animate-slide-up{animation:slide-up .3s ease-out}
+        .glass { background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+    <script>
+        tailwind.config={theme:{extend:{colors:{background:"#0a0a0a",foreground:"#ededed",primary:"#3b82f6",secondary:"#1f2937",destructive:"#ef4444"}}}}
+    </script>
+</head>
+<body class="h-full bg-background text-foreground antialiased" style="background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.2), transparent 40%), radial-gradient(circle at bottom left, rgba(147, 51, 234, 0.2), transparent 40%);">
+    <div class="flex min-h-full flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
+            <h1 class="text-4xl font-extrabold tracking-tight text-white mb-2">Flow2API <span class="text-primary">User</span></h1>
+            <p class="text-sm text-gray-400 mb-8">Nền tảng sáng tạo Video AI</p>
+        </div>
+
+        <div class="sm:mx-auto sm:w-full sm:max-w-md">
+            <div class="glass py-8 px-4 sm:px-10 rounded-2xl shadow-2xl">
+                <!-- Tabs -->
+                <div class="flex border-b border-gray-700 mb-6">
+                    <button id="tab-login" class="flex-1 py-2 font-medium text-primary border-b-2 border-primary" onclick="switchTab('login')">Đăng nhập</button>
+                    <button id="tab-register" class="flex-1 py-2 font-medium text-gray-400 hover:text-gray-200" onclick="switchTab('register')">Đăng ký</button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="loginForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Tài khoản</label>
+                        <input type="text" id="l_username" required class="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-800/50 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Mật khẩu</label>
+                        <input type="password" id="l_password" required class="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-800/50 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all">
+                    </div>
+                    <button type="submit" id="btnLogin" class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-gray-900 transition-colors">Đăng nhập</button>
+                </form>
+
+                <!-- Register Form -->
+                <form id="registerForm" class="space-y-6 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Tài khoản mới</label>
+                        <input type="text" id="r_username" required class="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-800/50 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Mật khẩu</label>
+                        <input type="password" id="r_password" required class="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-800/50 px-4 py-2.5 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all">
+                    </div>
+                    <button type="submit" id="btnRegister" class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-gray-900 transition-colors">Đăng ký tài khoản</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showToast(msg, type='info') {
+            const d = document.createElement('div');
+            const colors = {error: 'bg-destructive', success: 'bg-green-600', info: 'bg-primary'};
+            d.className = `fixed bottom-4 right-4 ${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 animate-slide-up`;
+            d.textContent = msg;
+            document.body.appendChild(d);
+            setTimeout(() => {
+                d.style.opacity = '0';
+                d.style.transition = 'opacity 0.3s';
+                setTimeout(() => d.remove(), 300);
+            }, 3000);
+        }
+
+        function switchTab(tab) {
+            if(tab === 'login') {
+                document.getElementById('loginForm').classList.remove('hidden');
+                document.getElementById('registerForm').classList.add('hidden');
+                document.getElementById('tab-login').className = 'flex-1 py-2 font-medium text-primary border-b-2 border-primary';
+                document.getElementById('tab-register').className = 'flex-1 py-2 font-medium text-gray-400 hover:text-gray-200 border-b border-transparent';
+            } else {
+                document.getElementById('registerForm').classList.remove('hidden');
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('tab-register').className = 'flex-1 py-2 font-medium text-primary border-b-2 border-primary';
+                document.getElementById('tab-login').className = 'flex-1 py-2 font-medium text-gray-400 hover:text-gray-200 border-b border-transparent';
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async(e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnLogin');
+            btn.disabled = true; btn.textContent = 'Đang xử lý...';
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: document.getElementById('l_username').value, password: document.getElementById('l_password').value})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    if(data.api_key) {
+                        localStorage.setItem('adminToken', data.api_key);
+                        localStorage.setItem('userToken', data.api_key); // Keep for compatibility
+                    }
+                    localStorage.setItem('userName', data.username);
+                    showToast('Đăng nhập thành công', 'success');
+                    setTimeout(() => location.href = '/manage', 1000);
+                } else {
+                    showToast(data.detail || 'Đăng nhập thất bại', 'error');
+                }
+            } catch(err) {
+                showToast('Lỗi kết nối', 'error');
+            } finally {
+                btn.disabled = false; btn.textContent = 'Đăng nhập';
+            }
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async(e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnRegister');
+            btn.disabled = true; btn.textContent = 'Đang xử lý...';
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: document.getElementById('r_username').value, password: document.getElementById('r_password').value})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    showToast('Đăng ký thành công! Hãy liên hệ Admin để mua Key.', 'success');
+                    setTimeout(() => switchTab('login'), 2000);
+                } else {
+                    showToast(data.detail || 'Đăng ký thất bại', 'error');
+                }
+            } catch(err) {
+                showToast('Lỗi kết nối', 'error');
+            } finally {
+                btn.disabled = false; btn.textContent = 'Đăng ký tài khoản';
+            }
+        });
+
+        // Check if already logged in
+        if(localStorage.getItem('adminToken') || localStorage.getItem('userToken')) {
+            const t = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
+            fetch('/api/auth/me', {headers: {Authorization: `Bearer ${t}`}})
+            .then(r => { if(r.ok) location.href = '/manage'; });
+        }
+    </script>
+</body>
+</html>

@@ -115,6 +115,7 @@ class TokenManager:
             project_id=project_id,
             token_id=token.id,
             project_name=project_name,
+            owner_id=token.owner_id,
         )
         project.id = await self.db.add_project(project)
         return project
@@ -137,13 +138,13 @@ class TokenManager:
 
     # ========== Token CRUD ==========
 
-    async def get_all_tokens(self) -> List[Token]:
+    async def get_all_tokens(self, user_id: Optional[int] = None) -> List[Token]:
         """Get all tokens"""
-        return await self.db.get_all_tokens()
+        return await self.db.get_all_tokens(user_id=user_id)
 
-    async def get_active_tokens(self) -> List[Token]:
+    async def get_active_tokens(self, user_id: Optional[int] = None) -> List[Token]:
         """Get all active tokens"""
-        return await self.db.get_active_tokens()
+        return await self.db.get_active_tokens(user_id=user_id)
 
     async def get_token(self, token_id: int) -> Optional[Token]:
         """Get token by ID"""
@@ -211,6 +212,7 @@ class TokenManager:
         video_concurrency: int = -1,
         captcha_proxy_url: Optional[str] = None,
         extension_route_key: Optional[str] = None,
+        owner_id: int = 0,
     ) -> Token:
         """Add a new token and prepare its pooled projects."""
         existing_token = await self.db.get_token_by_st(st)
@@ -287,12 +289,14 @@ class TokenManager:
             video_concurrency=video_concurrency,
             captcha_proxy_url=captcha_proxy_url,
             extension_route_key=extension_route_key,
+            owner_id=owner_id,
         )
 
         token_id = await self.db.add_token(token)
         token.id = token_id
 
         pooled_projects[0].token_id = token_id
+        pooled_projects[0].owner_id = owner_id
         pooled_projects[0].id = await self.db.add_project(pooled_projects[0])
 
         while len(pooled_projects) < project_pool_size:

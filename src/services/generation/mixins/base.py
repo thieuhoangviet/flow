@@ -123,8 +123,9 @@ class GenerationBaseMixin:
         log_id: Optional[int] = None,
         status_text: Optional[str] = None,
         progress: Optional[int] = None,
+        user_id: Optional[int] = None,
     ):
-        """???????????? log_id ????????"""
+        """记录生成请求到数据库"""
         try:
             effective_status_text = status_text or (
                 "completed" if status_code == 200 else "failed" if status_code >= 400 else "processing"
@@ -160,6 +161,7 @@ class GenerationBaseMixin:
                 duration=duration,
                 status_text=effective_status_text,
                 progress=effective_progress,
+                owner_id=user_id if user_id is not None else 0,
             )
             return await self.db.add_request_log(log)
         except Exception as e:

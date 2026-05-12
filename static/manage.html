@@ -41,12 +41,44 @@
         <div class="border-b border-border mb-6 flex overflow-x-auto">
             <nav class="flex space-x-8 min-w-max">
                 <button onclick="switchTab('tokens')" id="tabTokens" class="tab-btn border-b-2 border-primary text-sm font-medium py-3 px-1">Quản lý Token</button>
+                <button onclick="switchTab('users')" id="tabUsers" class="tab-btn border-b-2 border-transparent text-sm font-medium py-3 px-1">Quản lý User</button>
                 <button onclick="switchTab('settings')" id="tabSettings" class="tab-btn border-b-2 border-transparent text-sm font-medium py-3 px-1">Cấu hình he thong</button>
                 <button onclick="switchTab('logs')" id="tabLogs" class="tab-btn border-b-2 border-transparent text-sm font-medium py-3 px-1">Nhat ky request</button>
                 <a href="/test" id="tabTestPage" class="tab-btn inline-flex items-center border-b-2 border-transparent text-sm font-medium py-3 px-1">Trang thu nghiem</a>
                 <a href="/article" class="tab-btn inline-flex items-center border-b-2 border-transparent text-sm font-medium py-3 px-1">Tao Video Bài viết</a>
                 <a href="/story" class="tab-btn inline-flex items-center border-b-2 border-transparent text-sm font-medium py-3 px-1">Tao Video Ke chuyen</a>
             </nav>
+        </div>
+
+        <!-- Quản lý User -->
+        <div id="panelUsers" class="hidden">
+            <div class="rounded-lg border border-border bg-background mb-6">
+                <div class="flex items-center justify-between gap-4 p-4 border-b border-border">
+                    <h3 class="text-lg font-semibold">Danh sách Tài khoản Khách hàng</h3>
+                    <button onclick="loadUsers()" class="inline-flex items-center justify-center rounded-md transition-colors hover:bg-accent h-8 w-8" title="Làm mới">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-border bg-muted/50 text-muted-foreground text-left">
+                                <th class="font-medium py-3 px-4">Tài khoản</th>
+                                <th class="font-medium py-3 px-4">Role</th>
+                                <th class="font-medium py-3 px-4">API Key</th>
+                                <th class="font-medium py-3 px-4">Ngày hết hạn</th>
+                                <th class="font-medium py-3 px-4">Ngày tạo</th>
+                                <th class="font-medium py-3 px-4 text-right">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody" class="divide-y divide-border">
+                            <!-- JS load -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Quản lý Token -->
@@ -870,12 +902,97 @@
         </div>
     </div>
 
+    <!-- Popup Cấp quyền User -->
+    <div id="grantModal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div class="bg-background rounded-lg border border-border w-full max-w-md shadow-xl">
+            <div class="flex items-center justify-between p-5 border-b border-border">
+                <h3 class="text-lg font-semibold">Cấp Key / Gia hạn cho User</h3>
+                <button onclick="closeGrantModal()" class="text-muted-foreground hover:text-foreground">
+                    <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="grantUserId">
+                <div>
+                    <label class="text-sm font-medium mb-2 block">Số tháng gia hạn</label>
+                    <select id="grantMonths" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                        <option value="1">1 Tháng</option>
+                        <option value="3" selected>3 Tháng</option>
+                        <option value="6">6 Tháng</option>
+                        <option value="12">1 Năm (12 Tháng)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 p-5 border-t border-border">
+                <button onclick="closeGrantModal()" class="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent h-9 px-5">Hủy</button>
+                <button onclick="submitGrantUser()" class="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-5">Xác nhận Cấp Key</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allTokens=[];
+        let allUsers=[];
+        let currentUserRole = 'admin';
         const $=(id)=>document.getElementById(id),
-        checkAuth=()=>{const t=localStorage.getItem('adminToken');return t||(location.href='/login',null),t},
-        apiRequest=async(url,opts={})=>{const t=checkAuth();if(!t)return null;const r=await fetch(url,{cache:'no-store',...opts,headers:{...opts.headers,Authorization:`Bearer ${t}`,'Content-Type':'application/json'}});return r.status===401?(localStorage.removeItem('adminToken'),location.href='/login',null):r},
-        loadStats=async()=>{try{const r=await apiRequest('/api/stats');if(!r)return;const d=await r.json();$('statTotal').textContent=d.total_tokens||0;$('statActive').textContent=d.active_tokens||0;$('statImages').textContent=(d.today_images||0)+'/'+(d.total_images||0);$('statVideos').textContent=(d.today_videos||0)+'/'+(d.total_videos||0);$('statErrors').textContent=(d.today_errors||0)+'/'+(d.total_errors||0)}catch(e){console.error('Tải thống kê thất bại:',e)}},
+        checkAuth=async()=>{
+            const t=localStorage.getItem('adminToken');
+            if(!t){location.href='/login';return null} 
+            try{
+                const r=await fetch('/api/auth/me',{headers:{Authorization:`Bearer ${t}`}});
+                if(r.ok){
+                    const d=await r.json();
+                    currentUserRole = d.role;
+                    if(d.role==='user'){
+                        $('tabUsers').style.display='none';
+                        const cards = document.querySelectorAll('#panelSettings .grid > div');
+                        if (cards.length >= 10) {
+                            // cards[1].style.display = 'none'; // WE SHOW THIS NOW
+                            cards[2].style.display = 'none'; 
+                            cards[3].style.display = 'none'; 
+                            cards[4].style.display = 'none'; 
+                            cards[5].style.display = 'none'; 
+                            cards[6].style.display = 'none'; 
+                            cards[8].style.display = 'none'; 
+                            cards[9].style.display = 'none'; 
+                            
+                            const pluginCard = cards[7];
+                            if (pluginCard.children[1]) {
+                                pluginCard.children[1].children[0].style.display = 'none'; 
+                                pluginCard.children[1].children[1].style.display = 'none'; 
+                                pluginCard.children[1].children[2].style.display = 'none'; 
+                                pluginCard.children[1].children[4].style.display = 'none'; 
+                            }
+                            const h3 = pluginCard.querySelector('h3');
+                            if(h3) h3.textContent = 'Cấu hình Gemini API Key';
+                            
+                            const pluginBtn = pluginCard.querySelector('button.w-full');
+                            if(pluginBtn) pluginBtn.onclick = savePersonalGeminiKey;
+
+                            const pwdCard = cards[0];
+                            if (pwdCard.children[1] && pwdCard.children[1].children[0]) {
+                                pwdCard.children[1].children[0].style.display = 'none'; // Hide Admin Username
+                            }
+                            const pwdBtn = pwdCard.querySelector('button.w-full');
+                            if(pwdBtn) pwdBtn.onclick = updatePersonalPassword;
+                            const pwdH3 = pwdCard.querySelector('h3');
+                            if(pwdH3) pwdH3.textContent = 'Thay đổi mật khẩu cá nhân';
+
+                            const apiKeyCard = cards[1];
+                            const apiKeyBtn = apiKeyCard.querySelector('button.w-full');
+                            if(apiKeyBtn) apiKeyBtn.onclick = updatePersonalAPIKey;
+                            
+                            loadPersonalConfig();
+                        }
+                    } else {
+                        loadAdminConfig();
+                    }
+                }
+                return t
+            }catch(e){return t}
+        },
+        apiRequest=async(url,opts={})=>{const t=localStorage.getItem('adminToken');if(!t){location.href='/login';return null;} const r=await fetch(url,{cache:'no-store',...opts,headers:{...opts.headers,Authorization:`Bearer ${t}`,'Content-Type':'application/json'}});return r.status===401?(localStorage.removeItem('adminToken'),location.href='/login',null):r},
+        loadStats=async()=>{checkAuth();try{const r=await apiRequest('/api/stats');if(!r)return;const d=await r.json();$('statTotal').textContent=d.total_tokens||0;$('statActive').textContent=d.active_tokens||0;$('statImages').textContent=(d.today_images||0)+'/'+(d.total_images||0);$('statVideos').textContent=(d.today_videos||0)+'/'+(d.total_videos||0);$('statErrors').textContent=(d.today_errors||0)+'/'+(d.total_errors||0)}catch(e){console.error('Tải thống kê thất bại:',e)}},
         loadTokens=async()=>{try{const r=await apiRequest('/api/tokens');if(!r)return;allTokens=await r.json();renderTokens()}catch(e){console.error('Tải Token thất bại:',e)}},
         formatExpiry=exp=>{if(!exp)return'<span class="text-muted-foreground">-</span>';const d=new Date(exp),now=new Date(),diff=d-now;const dateStr=d.toLocaleDateString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');const timeStr=d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});const hours=Math.floor(diff/36e5);if(diff<0)return`<span class="text-red-600 font-medium" title="Đã hết hạn">Đã hết hạn</span>`;if(hours<1)return`<span class="text-red-600 font-medium" title="${dateStr} ${timeStr}">${Math.floor(diff/6e4)} phut</span>`;if(hours<24)return`<span class="text-orange-600 font-medium" title="${dateStr} ${timeStr}">${hours} gio</span>`;const days=Math.floor(diff/864e5);if(days<7)return`<span class="text-orange-600" title="${dateStr} ${timeStr}">${days} ngày</span>`;return`<span class="text-muted-foreground" title="${dateStr} ${timeStr}">${days} ngày</span>`},
         formatPlanType=type=>{if(!type)return'-';const typeMap={'chatgpt_team':'Team','chatgpt_plus':'Plus','chatgpt_pro':'Pro','chatgpt_free':'Free'};return typeMap[type]||type},
@@ -914,6 +1031,10 @@
         loadAdminConfig=async()=>{try{const r=await apiRequest('/api/admin/config');if(!r)return;const d=await r.json();$('cfgErrorBan').value=d.error_ban_threshold||3;$('cfgAdminUsername').value=d.admin_username||'admin';$('cfgCurrentAPIKey').value=d.api_key||'';$('cfgDebugEnabled').checked=d.debug_enabled||false}catch(e){console.error('Tải cấu hình thất bại:',e)}},
         saveAdminConfig=async()=>{try{const r=await apiRequest('/api/admin/config',{method:'POST',body:JSON.stringify({error_ban_threshold:parseInt($('cfgErrorBan').value)||3})});if(!r)return;const d=await r.json();d.success?showToast(' Cấu hình Lưu Thành công ','success'):showToast('Lưu Thất bại ','error')}catch(e){showToast('Lưu Thất bại : '+e.message,'error')}},
         updateAdminPassword=async()=>{const username=$('cfgAdminUsername').value.trim(),oldPwd=$('cfgOldPassword').value.trim(),newPwd=$('cfgNewPassword').value.trim();if(!oldPwd||!newPwd)return showToast('Nhập Mật khẩu cũ và Mật khẩu mới','error');if(newPwd.length<4)return showToast('Mật khẩu mới phải có ít nhất 4 ký tự','error');try{const r=await apiRequest('/api/admin/password',{method:'POST',body:JSON.stringify({username:username||undefined,old_password:oldPwd,new_password:newPwd})});if(!r)return;const d=await r.json();if(d.success){showToast('Đổi mật khẩu thành công, vui lòng đăng nhập lại','success');setTimeout(()=>{localStorage.removeItem('adminToken');location.href='/login'},2000)}else{showToast('Sửa thất bại: '+(d.detail||'Lỗi không xác định'),'error')}}catch(e){showToast('Sửa thất bại: '+e.message,'error')}},
+        updatePersonalPassword=async()=>{const oldPwd=$('cfgOldPassword').value.trim(),newPwd=$('cfgNewPassword').value.trim();if(!oldPwd||!newPwd)return showToast('Nhập Mật khẩu cũ và Mật khẩu mới','error');if(newPwd.length<4)return showToast('Mật khẩu mới phải có ít nhất 4 ký tự','error');try{const r=await apiRequest('/api/auth/me/password',{method:'POST',body:JSON.stringify({old_password:oldPwd,new_password:newPwd})});if(!r)return;const d=await r.json();if(d.success){showToast('Đổi mật khẩu thành công, vui lòng đăng nhập lại','success');setTimeout(()=>{localStorage.removeItem('adminToken');location.href='/login'},2000)}else{showToast('Sửa thất bại: '+(d.detail||'Lỗi không xác định'),'error')}}catch(e){showToast('Sửa thất bại: '+e.message,'error')}},
+        updatePersonalAPIKey=async()=>{const newKey=$('cfgNewAPIKey').value.trim();if(!newKey)return showToast('Vui lòng Nhập API Key mới','error');if(newKey.length<6)return showToast('API Key phải có ít nhất 6 ký tự','error');if(!confirm('Bạn có chắc muốn Đổi API Key mới không？ Việc này sẽ đăng xuất tài khoản của bạn.'))return;try{const r=await apiRequest('/api/auth/me/apikey',{method:'POST',body:JSON.stringify({new_api_key:newKey})});if(!r)return;const d=await r.json();if(d.success){showToast('Đổi API Key thành công, vui lòng đăng nhập lại','success');setTimeout(()=>{localStorage.removeItem('adminToken');location.href='/login'},2000)}else{showToast('Cập nhật thất bại: '+(d.detail||'Lỗi không xác định'),'error')}}catch(e){showToast('Cập nhật thất bại: '+e.message,'error')}},
+        loadPersonalConfig=async()=>{try{const r=await apiRequest('/api/auth/me');if(r){const d=await r.json();$('cfgCurrentAPIKey').value=d.api_key||''};const r2=await apiRequest('/api/auth/me/config');if(r2){const d2=await r2.json();$('cfgGeminiApiKey').value=d2.gemini_api_key||''}}catch(e){console.error('Tải cấu hình thất bại:',e)}},
+        savePersonalGeminiKey=async()=>{try{const r=await apiRequest('/api/auth/me/config',{method:'POST',body:JSON.stringify({gemini_api_key:$('cfgGeminiApiKey').value})});if(!r)return;const d=await r.json();d.success?showToast('Lưu cấu hình thành công','success'):showToast('Lưu thất bại','error')}catch(e){showToast('Lưu thất bại: '+e.message,'error')}},
         updateAPIKey=async()=>{const newKey=$('cfgNewAPIKey').value.trim();if(!newKey)return showToast('Vui lòng Nhập API Key mới','error');if(newKey.length<6)return showToast('API Key phải có ít nhất 6 ký tự','error');if(!confirm('Bạn có chắc muốn Cập nhật API Key mới không？ Cập nhật Sau khi cập nhật, cần thông báo cho mọi client sử dụng key mới。'))return;try{const r=await apiRequest('/api/admin/apikey',{method:'POST',body:JSON.stringify({new_api_key:newKey})});if(!r)return;const d=await r.json();if(d.success){showToast('Cập nhật API Key thành công','success');$('cfgCurrentAPIKey').value=newKey;$('cfgNewAPIKey').value=''}else{showToast('Cập nhật thất bại: '+(d.detail||'Lỗi không xác định'),'error')}}catch(e){showToast('Cập nhật thất bại: '+e.message,'error')}},
         toggleDebugMode=async()=>{const enabled=$('cfgDebugEnabled').checked;try{const r=await apiRequest('/api/admin/debug',{method:'POST',body:JSON.stringify({enabled:enabled})});if(!r)return;const d=await r.json();if(d.success){showToast(enabled?'Đã bật chế độ Debug':'Đã tắt chế độ Debug','success')}else{showToast('Thao tác thất bại: '+(d.detail||'Lỗi không xác định'),'error');$('cfgDebugEnabled').checked=!enabled}}catch(e){showToast('Thao tác thất bại: '+e.message,'error');$('cfgDebugEnabled').checked=!enabled}},
         loadProxyConfig=async()=>{try{const r=await apiRequest('/api/proxy/config');if(!r)return;const d=await r.json();$('cfgProxyEnabled').checked=d.proxy_enabled||false;$('cfgProxyUrl').value=d.proxy_url||'';$('cfgMediaProxyEnabled').checked=d.media_proxy_enabled||false;$('cfgMediaProxyUrl').value=d.media_proxy_url||'';toggleMediaProxyInput()}catch(e){console.error('Tải cấu hình Proxy thất bại:',e)}},
@@ -955,7 +1076,13 @@
         closeLogDetailModal=()=>{window.activeLogDetailId=null;resetLogMediaCache();$('logDetailModal').classList.add('hidden')},
         showToast=(m,t='info')=>{const d=document.createElement('div'),bc={success:'bg-green-600',error:'bg-destructive',info:'bg-primary'};d.className=`fixed bottom-4 right-4 ${bc[t]||bc.info} text-white px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium z-50 animate-slide-up`;d.textContent=m;document.body.appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.parentNode&&document.body.removeChild(d),300)},2000)},
         logout=()=>{if(!confirm('Bạn có chắc chắn muon dang xuat?'))return;localStorage.removeItem('adminToken');location.href='/login'},
-        switchTab=t=>{const cap=n=>n.charAt(0).toUpperCase()+n.slice(1);['tokens','settings','logs'].forEach(n=>{const active=n===t;$(`panel${cap(n)}`).classList.toggle('hidden',!active);$(`tab${cap(n)}`).classList.toggle('border-primary',active);$(`tab${cap(n)}`).classList.toggle('text-primary',active);$(`tab${cap(n)}`).classList.toggle('border-transparent',!active);$(`tab${cap(n)}`).classList.toggle('text-muted-foreground',!active)});if(t==='settings'){stopLogsAutoRefresh();loadAdminConfig();loadProxyConfig();loadCacheConfig();loadGenerationTimeout();loadCallLogicConfig();loadCaptchaConfig();loadPluginConfig();loadATAutoRefreshConfig()}else if(t==='logs'){startLogsAutoRefresh();loadLogs()}else{stopLogsAutoRefresh()}};
+        loadUsers=async()=>{try{const r=await apiRequest('/api/admin/users');if(!r)return;const d=await r.json();allUsers=d.users||[];renderUsers()}catch(e){console.error('Tải users thất bại:',e)}},
+        renderUsers=()=>{const tb=$('usersTableBody');tb.innerHTML=allUsers.map(u=>{const exp=u.expires_at?new Date(u.expires_at).toLocaleString('vi-VN'):'<span class="text-muted-foreground italic">Chưa cấp key</span>';const key=u.api_key?`<span class="font-mono text-xs">${u.api_key}</span>`:'<span class="text-muted-foreground italic">Chưa cấp</span>';const actions=`<button onclick="openGrantModal(${u.id})" class="inline-flex items-center justify-center rounded-md hover:bg-blue-50 hover:text-blue-700 h-7 px-3 text-xs font-medium">Gia hạn / Cấp Key</button> <button onclick="deleteUser(${u.id})" class="inline-flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-700 h-7 px-3 text-xs font-medium">Xóa</button>`;return`<tr><td class="py-3 px-4">${escapeLogHtml(u.username)}</td><td class="py-3 px-4">${u.role}</td><td class="py-3 px-4">${key}</td><td class="py-3 px-4">${exp}</td><td class="py-3 px-4 text-muted-foreground text-xs">${new Date(u.created_at).toLocaleString('vi-VN')}</td><td class="py-3 px-4 text-right">${actions}</td></tr>`}).join('')},
+        openGrantModal=(id)=>{$('grantUserId').value=id;$('grantModal').classList.remove('hidden')},
+        closeGrantModal=()=>{$('grantUserId').value='';$('grantModal').classList.add('hidden')},
+        submitGrantUser=async()=>{const id=$('grantUserId').value;const m=parseInt($('grantMonths').value);if(!id||!m)return;try{const r=await apiRequest(`/api/admin/users/${id}/grant`,{method:'POST',body:JSON.stringify({months:m})});if(r){const d=await r.json();showToast(d.message||'Cấp quyền thành công','success');closeGrantModal();loadUsers()}}catch(e){showToast('Lỗi: '+e.message,'error')}},
+        deleteUser=async(id)=>{if(!confirm('Xác nhận xóa tài khoản này?'))return;try{const r=await apiRequest(`/api/admin/users/${id}`,{method:'DELETE'});if(r){showToast('Đã xóa user','success');loadUsers()}}catch(e){showToast('Lỗi: '+e.message,'error')}},
+        switchTab=t=>{const cap=n=>n.charAt(0).toUpperCase()+n.slice(1);['tokens','users','settings','logs'].forEach(n=>{const active=n===t;$(`panel${cap(n)}`).classList.toggle('hidden',!active);$(`tab${cap(n)}`).classList.toggle('border-primary',active);$(`tab${cap(n)}`).classList.toggle('text-primary',active);$(`tab${cap(n)}`).classList.toggle('border-transparent',!active);$(`tab${cap(n)}`).classList.toggle('text-muted-foreground',!active)});if(t==='settings'){stopLogsAutoRefresh();if(currentUserRole==='user'){loadPersonalConfig();}else{loadAdminConfig();loadProxyConfig();loadCacheConfig();loadGenerationTimeout();loadCallLogicConfig();loadCaptchaConfig();loadPluginConfig();loadATAutoRefreshConfig();}}else if(t==='logs'){startLogsAutoRefresh();loadLogs()}else if(t==='users'){stopLogsAutoRefresh();loadUsers()}else{stopLogsAutoRefresh()}};
 
         function escapeLogHtml(text){
             if(text===null||text===undefined) return '';
