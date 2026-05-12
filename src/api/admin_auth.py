@@ -1,7 +1,7 @@
 """Admin authentication endpoints."""
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from pydantic import BaseModel
 from typing import Optional
 
@@ -29,19 +29,26 @@ class ChangePasswordRequest(BaseModel):
 
 # ========== Auth Middleware ==========
 
-async def verify_admin_token(authorization: str = Header(None)):
+async def verify_admin_token(
+    authorization: str = Header(None),
+    token: str = Query(None)
+):
     """Verify admin session token or user API key"""
-    if not authorization or not authorization.startswith("Bearer "):
+    auth_token = None
+    if authorization and authorization.startswith("Bearer "):
+        auth_token = authorization[7:]
+    elif token:
+        auth_token = token
+        
+    if not auth_token:
         raise HTTPException(status_code=401, detail="Missing authorization")
 
-    token = authorization[7:]
-
     # Check if token is in active admin session tokens
-    if token in active_admin_tokens:
-        return {"role": "admin", "token": token}
+    if auth_token in active_admin_tokens:
+        return {"role": "admin", "token": auth_token}
 
     # If not admin, check if it's a valid user API key
-    user = await deps.db.get_user_by_api_key(token)
+    user = await deps.db.get_user_by_api_key(auth_token)
     if user:
         from datetime import datetime
         if user["expires_at"]:

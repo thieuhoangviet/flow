@@ -412,6 +412,11 @@ async def download_file(file: str, name: str = "video.mp4"):
     if not abs_path and "://" in original_url:
         parsed = urlparse(original_url)
         if parsed.netloc not in ("localhost", "127.0.0.1", "localhost:8000", "127.0.0.1:8000"):
+            # SSRF Protection: Restrict external downloads to Google domains only
+            allowed_domains = ("googleusercontent.com", "googlevideo.com", "googleapis.com", "google.com")
+            if not any(parsed.netloc == d or parsed.netloc.endswith("." + d) for d in allowed_domains):
+                return JSONResponse({"error": "Forbidden: External domain not allowed"}, status_code=403)
+
             # Download external URL directly
             from curl_cffi.requests import AsyncSession
             from fastapi.responses import Response
