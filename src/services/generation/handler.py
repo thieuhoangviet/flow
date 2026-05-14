@@ -35,7 +35,7 @@ class GenerationHandler(
     """统一生成处理器"""
 
     def __init__(self, flow_client, token_manager, load_balancer, db, concurrency_manager, proxy_manager):
-        cache_dir = Path(__file__).resolve().parents[2] / "tmp"
+        cache_dir = Path(__file__).resolve().parents[3] / "tmp"
         self.flow_client = flow_client
         self.token_manager = token_manager
         self.load_balancer = load_balancer

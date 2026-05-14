@@ -6,7 +6,7 @@ import uuid
 import random
 import base64
 import ssl
-from typing import Dict, Any, Optional, List, Union, Callable, Awaitable
+from typing import TYPE_CHECKING, Any, Dict, Any, Optional, List, Union, Callable, Awaitable
 from urllib.parse import quote
 import urllib.error
 import urllib.request
@@ -19,6 +19,9 @@ except ImportError:
     pass
 
 class FlowClientImageMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _make_image_generation_request(
         self,
         url: str,

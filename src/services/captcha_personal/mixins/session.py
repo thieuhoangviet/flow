@@ -20,7 +20,7 @@ import tempfile
 import subprocess
 import types
 from pathlib import Path
-from typing import Optional, Dict, Any, Iterable
+from typing import TYPE_CHECKING, Any, Optional, Dict, Any, Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from src.core.logger import debug_logger
@@ -37,6 +37,9 @@ from ..utils import *
 from ..models import *
 
 class BrowserSessionMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _get_browser_cookies(
         self,
         label: str,
@@ -601,8 +604,8 @@ class BrowserSessionMixin:
             return False
 
         host = str(parsed.netloc or "").strip().lower()
-        path = str(parsed.path or "").strip()
-        return host == "labs.google" and path.rstrip("/") == "/fx/api/auth/providers"
+        path = str(parsed.path or "").strip().lower()
+        return host == "labs.google" and path == "/fx/api/auth/providers"
 
     async def _open_labs_bootstrap_page(self, tab, *, label: str) -> bool:
         """在 cookie 绑定之后再首跳 labs.google，避免首轮 anchor/reload 丢 cookie。"""
@@ -655,6 +658,14 @@ class BrowserSessionMixin:
             )
             return False
 
+        # Log pre-navigation state
+        pre_url, pre_ready = await _describe_surface("pre_navigate")
+        debug_logger.log_info(
+            f"[BrowserCaptcha] labs 引导页开始导航 "
+            f"(label={label}, target={PERSONAL_LABS_BOOTSTRAP_URL}, "
+            f"pre_url={pre_url or '<empty>'}, pre_ready={pre_ready or '<empty>'})"
+        )
+
         try:
             await self._tab_get(
                 tab,
@@ -669,7 +680,10 @@ class BrowserSessionMixin:
                     f"[BrowserCaptcha] 打开 labs 引导页时浏览器运行态断开 ({label}): {e}"
                 )
                 raise
-            debug_logger.log_warning(f"[BrowserCaptcha] 打开 labs 引导页失败 ({label}): {e}")
+            debug_logger.log_warning(
+                f"[BrowserCaptcha] 打开 labs 引导页导航异常 ({label}): "
+                f"{type(e).__name__}: {e}"
+            )
             return await _confirm_labs_surface(str(e), stage="navigate_timeout")
 
         if not await self._wait_for_document_ready(tab, retries=20, interval_seconds=0.5):

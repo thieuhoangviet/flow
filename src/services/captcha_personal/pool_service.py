@@ -609,6 +609,8 @@ class _PersonalBrowserPoolService:
         if self._closing:
             return []
             
+        await self._ensure_workers()
+            
         all_warmed_slots = []
         project_ids_list = list(project_ids)
         if not project_ids_list:
@@ -623,13 +625,22 @@ class _PersonalBrowserPoolService:
         # Simple delegation: ask each worker to warmup, distributing the limit
         per_worker_limit = max(1, (limit or len(project_ids_list)) // len(workers))
         
+        debug_logger.log_info(
+            f"[BrowserCaptchaPool] warmup: {len(project_ids_list)} projects, "
+            f"{len(workers)} worker(s), per_worker_limit={per_worker_limit}"
+        )
+        
         tasks = []
         for worker in workers:
             tasks.append(worker.warmup_resident_tabs(project_ids_list, limit=per_worker_limit))
             
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        for res in results:
-            if isinstance(res, list):
+        for i, res in enumerate(results):
+            if isinstance(res, Exception):
+                debug_logger.log_warning(
+                    f"[BrowserCaptchaPool] Worker {i} warmup FAILED: {type(res).__name__}: {res}"
+                )
+            elif isinstance(res, list):
                 all_warmed_slots.extend(res)
                 
         return all_warmed_slots

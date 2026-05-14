@@ -187,12 +187,51 @@ class TokenManager:
             except Exception as e:
                 debug_logger.log_warning(f"[DELETE_TOKEN] 清理 personal 浏览器状态失败: {e}")
 
+    async def _trigger_warmup_for_token(self, token_id: int):
+        """Trigger background warmup for a newly enabled or added token."""
+        debug_logger.log_info(f"[TOKEN_WARMUP] Entering _trigger_warmup_for_token for Token {token_id}")
+        from ..core.config import config
+        if config.captcha_method != "personal":
+            debug_logger.log_info(f"[TOKEN_WARMUP] captcha_method is {config.captcha_method}, exiting")
+            return
+            
+        try:
+            token = await self.db.get_token(token_id)
+            if not token:
+                debug_logger.log_warning(f"[TOKEN_WARMUP] Token {token_id} not found")
+                return
+            if not token.is_active:
+                debug_logger.log_warning(f"[TOKEN_WARMUP] Token {token_id} is not active")
+                return
+            if not token.current_project_id:
+                debug_logger.log_warning(f"[TOKEN_WARMUP] Token {token_id} has no current_project_id")
+                return
+                
+            from .browser_captcha_personal import BrowserCaptchaService
+            service = await BrowserCaptchaService.get_instance(self.db)
+            
+            debug_logger.log_info(f"[TOKEN_WARMUP] Triggering background warmup for Token {token_id} (Project {token.current_project_id})")
+            
+            # Run in background to not block the API
+            import asyncio
+            asyncio.create_task(service.warmup_resident_tabs([token.current_project_id], limit=1))
+        except Exception as e:
+            debug_logger.log_warning(f"[TOKEN_WARMUP] Failed to trigger warmup for Token {token_id}: {e}")
+
     async def enable_token(self, token_id: int):
         """Enable a token and reset error count"""
         # Enable the token
         await self.db.update_token(token_id, is_active=True, ban_reason=None, banned_at=None)
         # Reset error count when enabling (only reset total error_count, keep today_error_count)
         await self.db.reset_error_count(token_id)
+        
+        # Trigger background warmup
+        import asyncio
+        task = asyncio.create_task(self._trigger_warmup_for_token(token_id))
+        if not hasattr(self, "_bg_tasks"):
+            self._bg_tasks = set()
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
 
     async def disable_token(self, token_id: int):
         """Disable a token"""
@@ -306,6 +345,15 @@ class TokenManager:
         debug_logger.log_info(
             f"[ADD_TOKEN] Token added successfully (ID: {token_id}, Email: {email}, pooled_projects={len(pooled_projects)})"
         )
+        
+        # Trigger background warmup
+        import asyncio
+        task = asyncio.create_task(self._trigger_warmup_for_token(token_id))
+        if not hasattr(self, "_bg_tasks"):
+            self._bg_tasks = set()
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+        
         return token
     async def update_token(
         self,

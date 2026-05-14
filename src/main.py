@@ -19,7 +19,7 @@ from .services.token_manager import TokenManager
 from .services.load_balancer import LoadBalancer
 from .services.concurrency_manager import ConcurrencyManager
 from .services.generation_handler import GenerationHandler
-from src.api import routes, admin, merge, translate, dubbing, tts, routes_article, routes_auth
+from src.api import routes, admin, merge, translate, dubbing, tts, routes_article, routes_auth, jobs, workers
 from .core.auth import AuthManager
 
 
@@ -113,6 +113,16 @@ async def lifespan(app: FastAPI):
     # Initialize concurrency manager
     await concurrency_manager.initialize(tokens)
 
+    # Initialize risk-aware local workers from current tokens.
+    try:
+        created_workers = await workers.get_worker_manager().ensure_default_workers_from_tokens()
+        if created_workers:
+            print(f"✓ Risk-aware worker registry synced ({created_workers} new worker(s))")
+        else:
+            print("✓ Risk-aware worker registry ready")
+    except Exception as e:
+        print(f"⚠ Risk-aware worker registry sync failed: {e}")
+
     if config.captcha_method == "remote_browser":
         try:
             warmed_projects = await flow_client.prefill_remote_browser_for_tokens(tokens, action="IMAGE_GENERATION")
@@ -184,6 +194,8 @@ generation_handler = GenerationHandler(
 routes.set_generation_handler(generation_handler)
 admin.set_dependencies(token_manager, proxy_manager, db, concurrency_manager)
 routes_auth.set_db(db)
+jobs.set_db(db)
+workers.set_db(db)
 AuthManager.set_db(db)
 
 # Create FastAPI app
@@ -212,6 +224,8 @@ app.include_router(dubbing.router)
 app.include_router(tts.router)
 app.include_router(routes_article.router)
 app.include_router(routes_auth.router)
+app.include_router(jobs.router)
+app.include_router(workers.router)
 
 # Serve tmp files with proper Content-Disposition for videos
 tmp_dir = Path(__file__).parent.parent / "tmp"

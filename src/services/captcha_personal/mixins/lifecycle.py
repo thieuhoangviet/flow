@@ -20,7 +20,7 @@ import tempfile
 import subprocess
 import types
 from pathlib import Path
-from typing import Optional, Dict, Any, Iterable
+from typing import TYPE_CHECKING, Any, Optional, Dict, Any, Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from src.core.logger import debug_logger
@@ -37,6 +37,9 @@ from ..utils import *
 from ..models import *
 
 class BrowserLifecycleMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def initialize(self):
         """初始化 nodriver 浏览器"""
         self._check_available()

@@ -9,6 +9,8 @@ YESCAPTCHA_TASK_TYPE_OPTIONS = {
     "RecaptchaV3TaskProxylessM1": None,
     "RecaptchaV3TaskProxylessM1S7": 0.7,
     "RecaptchaV3TaskProxylessM1S9": 0.9,
+    "RecaptchaV3EnterpriseTask": None,
+    "RecaptchaV3EnterpriseTaskProxyless": None,
 }
 
 

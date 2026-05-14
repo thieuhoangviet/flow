@@ -52,7 +52,18 @@ def _sse_msg(event_type: str, data: any) -> str:
 
 async def extract_article(url: str) -> str:
     import trafilatura
-    downloaded = trafilatura.fetch_url(url)
+    import httpx
+    
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+    async with httpx.AsyncClient(verify=False, follow_redirects=True) as client:
+        try:
+            resp = await client.get(url, headers=headers, timeout=30.0)
+            if resp.status_code != 200:
+                raise Exception(f"Lỗi tải trang: HTTP {resp.status_code}")
+            downloaded = resp.text
+        except Exception as e:
+            raise Exception(f"Không thể tải nội dung bài báo: {e}")
+            
     if not downloaded:
         raise Exception("Không thể tải nội dung bài báo.")
     text = trafilatura.extract(downloaded)
@@ -68,7 +79,7 @@ async def generate_script(text: str, gemini_api_key: str) -> dict:
         "generationConfig": {"responseMimeType": "application/json"}
     }
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(verify=False) as client:
         resp = await client.post(url, json=payload, timeout=60.0)
         if resp.status_code != 200:
             raise Exception(f"Lỗi API Gemini: {resp.text}")
@@ -106,7 +117,7 @@ def extract_url(text: str) -> str:
     raise ValueError(f"Không tìm thấy URL tải xuống hợp lệ trong phản hồi. Raw: {text[:100]}")
 
 async def download_file(url: str, output_path: str):
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
         async with client.stream('GET', url) as response:
             with open(output_path, 'wb') as f:
                 async for chunk in response.aiter_bytes():
@@ -124,7 +135,28 @@ async def stream_article_to_video(url: str, gemini_api_key: str, output_dir: str
         
         # 2. Tạo Kịch Bản
         yield _sse_msg("log", "Đang phân tích bài báo và viết kịch bản bằng Gemini AI...")
-        script = await generate_script(article_text, gemini_api_key)
+        
+        import random
+        api_keys = [k.strip() for k in gemini_api_key.split(",") if k.strip()]
+        if not api_keys:
+            raise Exception("Không tìm thấy Gemini API Key hợp lệ.")
+            
+        script = None
+        max_script_retries = 3
+        for attempt in range(1, max_script_retries + 1):
+            try:
+                current_key = random.choice(api_keys)
+                script = await generate_script(article_text, current_key)
+                break
+            except Exception as e:
+                if "503" in str(e) or "429" in str(e) or attempt < max_script_retries:
+                    if attempt < max_script_retries:
+                        yield _sse_msg("log", f"Lỗi Gemini API (Lần {attempt}/{max_script_retries}): Máy chủ Google đang quá tải, thử lại sau 5s...")
+                        await asyncio.sleep(5)
+                    else:
+                        raise e
+                else:
+                    raise e
         
         with open(os.path.join(output_dir, "script.json"), "w", encoding="utf-8") as f:
             json.dump(script, f, ensure_ascii=False, indent=2)

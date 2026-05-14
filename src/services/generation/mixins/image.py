@@ -3,7 +3,7 @@ import base64
 import json
 import time
 from pathlib import Path
-from typing import Optional, AsyncGenerator, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, AsyncGenerator, List, Dict, Any
 from src.core.logger import debug_logger
 from src.core.config import config
 from src.core.monitoring import record_generation_result
@@ -20,6 +20,9 @@ from src.services.file_cache import FileCache
 from src.services.generation.utils import MODEL_CONFIG, _make_t2v_config, _make_i2v_config, _apply_veo_3_1_model_updates, _known_video_model_keys, _resolve_tier_two_model_key
 
 class GenerationImageMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _handle_image_generation(
         self,
         token,

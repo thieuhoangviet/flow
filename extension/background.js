@@ -4,7 +4,7 @@ let heartbeatInterval = null;
 
 const DEFAULT_SETTINGS = {
     serverUrl: "ws://127.0.0.1:8000/captcha_ws",
-    apiKey: "",
+    apiKey: "admin-5zOVZYmBabsldj03O2oXCfiJMzgjItiwB4q384QJQCs",
     routeKey: "",
     clientLabel: ""
 };
@@ -147,6 +147,16 @@ async function handleGetToken(data) {
 
         await waitForTabReady(newTabId);
         await sleep(1200);
+
+        // Check if the tab was redirected to Google login
+        try {
+            const finalTab = await chrome.tabs.get(newTabId);
+            if (finalTab.url && finalTab.url.includes("accounts.google.com")) {
+                throw new Error("Tài khoản Google Labs đã bị đăng xuất. Vui lòng mở trang Google Labs và đăng nhập lại trên trình duyệt.");
+            }
+        } catch (e) {
+            if (e.message.includes("đăng xuất")) throw e;
+        }
 
         let successResponse = null;
         let lastErrorMsg = "No response from tab.";

@@ -1,4 +1,5 @@
 import asyncio
+from typing import TYPE_CHECKING, Any
 import base64
 from collections import deque
 from dataclasses import dataclass
@@ -37,6 +38,9 @@ from ..utils import *
 from ..models import *
 
 class BrowserFingerprintMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def _refresh_runtime_fingerprint_spoof_seed(
         self,
         *,
@@ -1009,149 +1013,98 @@ class BrowserFingerprintMixin:
             return False
 
     async def _stealth_minimize_browser_window(self):
-        """Stealth hidden: minimize cửa sổ browser khi chạy ở chế độ ẩn.
-
-        Khi personal_headless=True, browser thực tế chạy headed (để tránh
-        HeadlessChrome UA) nhưng cửa sổ được ẩn hoàn toàn bằng:
-        1. --window-position=-32000,-32000 (offscreen)
-        2. --window-size=1,1 (cực nhỏ)
-        3. CDP minimize (ẩn khỏi taskbar)
-        4. Visibility spoof JS (giả visibilityState=visible)
-        5. Win32 ShowWindow(SW_HIDE) (ẩn hoàn toàn khỏi taskbar trên Windows)
+        """Stealth hidden: đẩy cửa sổ ra phía sau (không minimize) để tránh BotGuard phát hiện.
         """
         try:
-            from nodriver import cdp
-
-            browser = self.browser
-            if browser is None or getattr(browser, "stopped", False):
-                return
-
-            # Lấy window ID và minimize
-            result = await self._run_with_timeout(
-                browser.connection.send(cdp.browser.get_window_for_target()),
-                timeout_seconds=5.0,
-                label="stealth_minimize:get_window",
-            )
-            window_id = None
-            if isinstance(result, (list, tuple)) and len(result) >= 1:
-                window_id = result[0]
-            elif hasattr(result, "window_id"):
-                window_id = result.window_id
-
-            if window_id is not None:
-                bounds = cdp.browser.Bounds(
-                    window_state=cdp.browser.WindowState.MINIMIZED
-                )
-                await self._run_with_timeout(
-                    browser.connection.send(
-                        cdp.browser.set_window_bounds(window_id, bounds)
-                    ),
-                    timeout_seconds=5.0,
-                    label="stealth_minimize:set_bounds",
-                )
-                debug_logger.log_info(
-                    "[BrowserCaptcha] Stealth hidden: cửa sổ browser đã minimize"
-                )
-            else:
-                debug_logger.log_warning(
-                    "[BrowserCaptcha] Stealth hidden: không lấy được window_id, bỏ qua minimize"
-                )
-
-            # Windows: ẩn hoàn toàn cửa sổ Chrome khỏi taskbar bằng Win32 API
             if sys.platform.startswith("win"):
                 import asyncio
                 async def hide_loop():
-                    for _ in range(15):
-                        try:
-                            await self._win32_hide_browser_windows()
-                        except Exception:
-                            pass
-                        await asyncio.sleep(1.0)
+                    await self._win32_hide_browser_windows()
                 asyncio.create_task(hide_loop())
-
         except Exception as e:
-            debug_logger.log_warning(
-                f"[BrowserCaptcha] Stealth hidden: minimize thất bại (không ảnh hưởng hoạt động): {e}"
+            debug_logger.log_warning(f"[BrowserCaptcha] Stealth hidden setup failed: {e}")
+
+    async def _win32_hide_browser_windows(self):
+        """Ẩn tất cả cửa sổ Chrome liên quan đến browser PID khỏi taskbar."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            SW_HIDE = 0
+            GWL_EXSTYLE = -20
+            WS_EX_TOOLWINDOW = 0x00000080
+
+            EnumWindows = user32.EnumWindows
+            GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+            ShowWindow = user32.ShowWindow
+            IsWindowVisible = user32.IsWindowVisible
+            SetWindowLongW = user32.SetWindowLongW
+            GetWindowLongW = user32.GetWindowLongW
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(
+                wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
             )
 
-    def _win32_hide_browser_windows(self_outer):
-        """Ẩn tất cả cửa sổ Chrome liên quan đến browser PID khỏi taskbar."""
-        import asyncio
+            browser_pid = self._browser_process_pid
+            if not browser_pid:
+                return
 
-        async def _do_hide():
+            # Tìm tất cả PID con của browser process
+            target_pids = {int(browser_pid)}
             try:
-                import ctypes
-                from ctypes import wintypes
-
-                user32 = ctypes.windll.user32
-                kernel32 = ctypes.windll.kernel32
-
-                SW_HIDE = 0
-                GWL_EXSTYLE = -20
-                WS_EX_TOOLWINDOW = 0x00000080
-
-                EnumWindows = user32.EnumWindows
-                GetWindowThreadProcessId = user32.GetWindowThreadProcessId
-                ShowWindow = user32.ShowWindow
-                IsWindowVisible = user32.IsWindowVisible
-                SetWindowLongW = user32.SetWindowLongW
-                GetWindowLongW = user32.GetWindowLongW
-
-                WNDENUMPROC = ctypes.WINFUNCTYPE(
-                    wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
+                import subprocess
+                result = subprocess.run(
+                    ["wmic", "process", "where",
+                     f"ParentProcessId={int(browser_pid)}",
+                     "get", "ProcessId"],
+                    capture_output=True, text=True, timeout=5,
                 )
+                for line in (result.stdout or "").strip().splitlines():
+                    line = line.strip()
+                    if line.isdigit():
+                        target_pids.add(int(line))
+            except Exception:
+                pass
 
-                browser_pid = self_outer._browser_process_pid
-                if not browser_pid:
-                    return
+            hidden_count = 0
 
-                # Tìm tất cả PID con của browser process
-                target_pids = {int(browser_pid)}
+            @WNDENUMPROC
+            def enum_callback(hwnd, _lparam):
+                nonlocal hidden_count
                 try:
-                    result = subprocess.run(
-                        ["wmic", "process", "where",
-                         f"ParentProcessId={int(browser_pid)}",
-                         "get", "ProcessId"],
-                        capture_output=True, text=True, timeout=5,
-                    )
-                    for line in (result.stdout or "").strip().splitlines():
-                        line = line.strip()
-                        if line.isdigit():
-                            target_pids.add(int(line))
+                    pid = wintypes.DWORD()
+                    GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                    if pid.value in target_pids:
+                        # Không dùng SW_HIDE vì sẽ báo cho Chrome biết cửa sổ bị ẩn (BotGuard sẽ phát hiện)
+                        # Thay vào đó, đẩy nó xuống dưới cùng (HWND_BOTTOM) và ẩn khỏi taskbar (WS_EX_TOOLWINDOW)
+                        HWND_BOTTOM = 1
+                        SWP_NOMOVE = 0x0002
+                        SWP_NOSIZE = 0x0001
+                        SWP_NOACTIVATE = 0x0010
+                        
+                        user32.SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+                        
+                        # Thêm style TOOLWINDOW để không hiện trên taskbar
+                        ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE)
+                        SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TOOLWINDOW)
+                        hidden_count += 1
                 except Exception:
                     pass
+                return True
 
-                hidden_count = 0
+            EnumWindows(enum_callback, 0)
 
-                @WNDENUMPROC
-                def enum_callback(hwnd, _lparam):
-                    nonlocal hidden_count
-                    try:
-                        pid = wintypes.DWORD()
-                        GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-                        if pid.value in target_pids:
-                            # Ẩn cửa sổ
-                            ShowWindow(hwnd, SW_HIDE)
-                            # Thêm style TOOLWINDOW để không hiện trên taskbar
-                            ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE)
-                            SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TOOLWINDOW)
-                            hidden_count += 1
-                    except Exception:
-                        pass
-                    return True
-
-                EnumWindows(enum_callback, 0)
-
-                if hidden_count > 0:
-                    debug_logger.log_info(
-                        f"[BrowserCaptcha] Stealth hidden: đã ẩn {hidden_count} cửa sổ Chrome khỏi taskbar (Win32 API)"
-                    )
-            except Exception as e:
-                debug_logger.log_warning(
-                    f"[BrowserCaptcha] Stealth hidden: Win32 hide thất bại: {e}"
+            if hidden_count > 0:
+                debug_logger.log_info(
+                    f"[BrowserCaptcha] Stealth hidden: đã ẩn {hidden_count} cửa sổ Chrome khỏi taskbar (Win32 API)"
                 )
-
-        return _do_hide()
+        except Exception as e:
+            debug_logger.log_warning(
+                f"[BrowserCaptcha] Stealth hidden: Win32 hide thất bại: {e}"
+            )
 
     async def _simulate_startup_human_warmup(
         self,

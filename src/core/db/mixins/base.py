@@ -3,12 +3,15 @@ import aiosqlite
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, List, Dict, Any
 from pathlib import Path
 from ...config import DEFAULT_YESCAPTCHA_TASK_TYPE, normalize_yescaptcha_task_type
 from ...models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConfig, GenerationConfig, CacheConfig, Project, CaptchaConfig, PluginConfig, CallLogicConfig
 
 class DatabaseBaseMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _configure_connection(self, db):
         """Apply SQLite runtime settings for better concurrent behavior."""
         await db.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
@@ -411,6 +414,62 @@ class DatabaseBaseMixin:
                     )
                 """)
 
+            # Check and create generation_jobs table if missing
+            if not await self._table_exists(db, "generation_jobs"):
+                print("  ✓ Creating missing table: generation_jobs")
+                await db.execute("""
+                    CREATE TABLE generation_jobs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        job_id TEXT UNIQUE NOT NULL,
+                        mode TEXT DEFAULT 'manual',
+                        model TEXT NOT NULL,
+                        prompt TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'queued',
+                        stage TEXT DEFAULT 'queued',
+                        progress INTEGER DEFAULT 0,
+                        error_message TEXT,
+                        result_json TEXT,
+                        media_urls TEXT,
+                        log_text TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        completed_at TIMESTAMP
+                    )
+                """)
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_jobs_job_id ON generation_jobs(job_id)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_jobs_status ON generation_jobs(status)")
+
+            # Check and create generation_workers table if missing
+            if not await self._table_exists(db, "generation_workers"):
+                print("  ✓ Creating missing table: generation_workers")
+                await db.execute("""
+                    CREATE TABLE generation_workers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        worker_id TEXT UNIQUE NOT NULL,
+                        label TEXT,
+                        worker_type TEXT DEFAULT 'local',
+                        account_label TEXT,
+                        token_id INTEGER,
+                        proxy_url TEXT,
+                        profile_dir TEXT,
+                        project_id TEXT,
+                        status TEXT DEFAULT 'active',
+                        risk_score INTEGER DEFAULT 0,
+                        cooldown_until TIMESTAMP,
+                        last_error TEXT,
+                        last_error_code TEXT,
+                        last_success_at TIMESTAMP,
+                        last_used_at TIMESTAMP,
+                        success_count INTEGER DEFAULT 0,
+                        error_count INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_workers_worker_id ON generation_workers(worker_id)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_workers_status ON generation_workers(status)")
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_workers_token_id ON generation_workers(token_id)")
+
             # ========== Step 2: Add missing columns to existing tables ==========
             # Check and add missing columns to tokens table
             if await self._table_exists(db, "tokens"):
@@ -709,6 +768,58 @@ class DatabaseBaseMixin:
                     FOREIGN KEY (token_id) REFERENCES tokens(id)
                 )
             """)
+
+            # Persistent generation jobs for dashboard restore/realtime progress
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS generation_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT UNIQUE NOT NULL,
+                    mode TEXT DEFAULT 'manual',
+                    model TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    stage TEXT DEFAULT 'queued',
+                    progress INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    result_json TEXT,
+                    media_urls TEXT,
+                    log_text TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP
+                )
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_jobs_job_id ON generation_jobs(job_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_jobs_status ON generation_jobs(status)")
+
+            # Risk-aware generation worker registry
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS generation_workers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    worker_id TEXT UNIQUE NOT NULL,
+                    label TEXT,
+                    worker_type TEXT DEFAULT 'local',
+                    account_label TEXT,
+                    token_id INTEGER,
+                    proxy_url TEXT,
+                    profile_dir TEXT,
+                    project_id TEXT,
+                    status TEXT DEFAULT 'active',
+                    risk_score INTEGER DEFAULT 0,
+                    cooldown_until TIMESTAMP,
+                    last_error TEXT,
+                    last_error_code TEXT,
+                    last_success_at TIMESTAMP,
+                    last_used_at TIMESTAMP,
+                    success_count INTEGER DEFAULT 0,
+                    error_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_workers_worker_id ON generation_workers(worker_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_workers_status ON generation_workers(status)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_generation_workers_token_id ON generation_workers(token_id)")
 
             # Admin config table
             await db.execute("""

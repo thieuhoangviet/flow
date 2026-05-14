@@ -20,7 +20,7 @@ import tempfile
 import subprocess
 import types
 from pathlib import Path
-from typing import Optional, Dict, Any, Iterable
+from typing import TYPE_CHECKING, Any, Optional, Dict, Any, Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from src.core.logger import debug_logger
@@ -37,6 +37,9 @@ from ..utils import *
 from ..models import *
 
 class BrowserSolverMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _tab_evaluate(
         self,
         tab,
@@ -1151,7 +1154,6 @@ class BrowserSolverMixin:
 
                     if not await self._open_labs_bootstrap_page(tab, label=f"legacy:{project_id}"):
                         debug_logger.log_error("[BrowserCaptcha] [Legacy] 打开 labs 引导页失败")
-                        print("[DEBUG] _open_labs_bootstrap_page failed! Returning None")
                         return None
 
                     # 等待 reCAPTCHA 加载
@@ -1159,7 +1161,6 @@ class BrowserSolverMixin:
 
                     if not recaptcha_ready:
                         debug_logger.log_error("[BrowserCaptcha] [Legacy] reCAPTCHA 无法加载")
-                        print("[DEBUG] recaptcha_ready failed! Returning None")
                         return None
 
                     # 执行 reCAPTCHA
@@ -1191,7 +1192,6 @@ class BrowserSolverMixin:
                         return token
 
                     debug_logger.log_error("[BrowserCaptcha] [Legacy] Token获取失败（返回null）")
-                    print("[DEBUG] Token获取失败! Returning None")
                     return None
 
                 except Exception as e:
@@ -1203,7 +1203,6 @@ class BrowserSolverMixin:
                         continue
 
                     debug_logger.log_error(f"[BrowserCaptcha] [Legacy] 获取token异常: {str(e)}")
-                    print(f"[DEBUG] Exception in _get_token_legacy: {str(e)}")
                     return None
                 finally:
                     # 关闭 legacy 临时标签页（但保留浏览器）

@@ -20,7 +20,7 @@ import tempfile
 import subprocess
 import types
 from pathlib import Path
-from typing import Optional, Dict, Any, Iterable
+from typing import TYPE_CHECKING, Any, Optional, Dict, Any, Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from src.core.logger import debug_logger
@@ -37,6 +37,9 @@ from ..utils import *
 from ..models import *
 
 class BrowserTabsMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _open_visible_browser_tab(
         self,
         url: str,
@@ -1751,6 +1754,19 @@ class BrowserTabsMixin:
         """
         if not project_ids:
             return []
+
+        # Ensure the browser is launched before creating resident tabs.
+        # Without this, _create_resident_tab will find self.browser=None
+        # and silently return None for every project.
+        try:
+            await self.initialize()
+        except Exception as exc:
+            debug_logger.log_warning(
+                f"[BrowserCaptcha] warmup_resident_tabs: browser initialize failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return []
+
         warmed: list[Optional[str]] = []
         for pid in project_ids:
             if len(warmed) >= limit:
@@ -1763,9 +1779,17 @@ class BrowserTabsMixin:
                 )
                 if _slot_id:
                     warmed.append(_slot_id)
-            except Exception:
+                    debug_logger.log_info(
+                        f"[BrowserCaptcha] warmup OK: project={pid} slot={_slot_id}"
+                    )
+                else:
+                    debug_logger.log_warning(
+                        f"[BrowserCaptcha] warmup: project={pid} returned empty slot"
+                    )
+            except Exception as exc:
                 debug_logger.log_warning(
-                    f"[BrowserCaptcha] warmup_resident_tabs 预热 project={pid} 失败",
+                    f"[BrowserCaptcha] warmup FAILED: project={pid}: "
+                    f"{type(exc).__name__}: {exc}"
                 )
         return warmed
 

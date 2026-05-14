@@ -3,7 +3,7 @@ import base64
 import json
 import time
 from pathlib import Path
-from typing import Optional, AsyncGenerator, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, AsyncGenerator, List, Dict, Any
 from src.core.logger import debug_logger
 from src.core.config import config
 from src.core.monitoring import record_generation_result
@@ -20,6 +20,9 @@ from src.services.file_cache import FileCache
 from src.services.generation.utils import MODEL_CONFIG, _make_t2v_config, _make_i2v_config, _apply_veo_3_1_model_updates, _known_video_model_keys, _resolve_tier_two_model_key
 
 class GenerationVideoMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _handle_video_generation(
         self,
         token,
@@ -260,16 +263,32 @@ class GenerationVideoMixin:
             if video_trace is not None:
                 video_trace["submit_generation_ms"] = int((time.time() - submit_started_at) * 1000)
 
-            # 获取task_id和operations
+            # 获取task_id (兼容 operations 和 workflows/media 两种格式)
             operations = result.get("operations", [])
-            if not operations:
+            workflows = result.get("workflows", [])
+            media = result.get("media", [])
+            
+            if not operations and not workflows and not media:
+                import json
+                debug_logger.log_error(f"生成任务创建失败，返回值为: {json.dumps(result, ensure_ascii=False)}")
                 self._mark_generation_failed(generation_result, "\u751f\u6210\u4efb\u52a1\u521b\u5efa\u5931\u8d25")
                 yield self._create_error_response("生成任务创建失败", status_code=502)
                 return
 
-            operation = operations[0]
-            task_id = operation["operation"]["name"]
-            scene_id = operation.get("sceneId")
+            if media:
+                operation = media[0]
+                task_id = operation.get("name")
+                scene_id = operation.get("sceneId")
+            elif workflows:
+                operation = workflows[0]
+                task_id = operation.get("name") or operation.get("workflowId")
+                scene_id = operation.get("sceneId")
+                if not task_id and "operation" in operation:
+                    task_id = operation["operation"].get("name")
+            else:
+                operation = operations[0]
+                task_id = operation["operation"]["name"]
+                scene_id = operation.get("sceneId")
 
             # 保存Task到数据库
             task = Task(
@@ -302,10 +321,11 @@ class GenerationVideoMixin:
                 extend_source_id = actual_video_media_id
             else:
                 extend_source_id = None
+            tracking_items = operations if operations else media if media else workflows
             async for chunk in self._poll_video_result(
                 token,
                 project_id,
-                operations,
+                tracking_items,
                 stream,
                 upsample_config,
                 generation_result,
@@ -322,7 +342,7 @@ class GenerationVideoMixin:
         self,
         token,
         project_id: str,
-        operations: List[Dict],
+        tracking_items: List[Dict],
         stream: bool,
         upsample_config: Optional[Dict] = None,
         generation_result: Optional[Dict[str, Any]] = None,
@@ -354,8 +374,8 @@ class GenerationVideoMixin:
             await asyncio.sleep(poll_interval)
 
             try:
-                result = await self.flow_client.check_video_status(token.at, operations)
-                checked_operations = result.get("operations", [])
+                result = await self.flow_client.check_video_status(token.at, tracking_items)
+                checked_operations = result.get("operations", []) or result.get("media", []) or result.get("workflows", [])
                 consecutive_poll_errors = 0
                 last_poll_error = None
 
@@ -363,7 +383,16 @@ class GenerationVideoMixin:
                     continue
 
                 operation = checked_operations[0]
-                status = operation.get("status")
+                
+                # Extract status depending on whether it's an operation or a workflow/media
+                if "operation" in operation:
+                    status = operation.get("status")
+                elif "mediaMetadata" in operation:
+                    status = operation["mediaMetadata"].get("mediaStatus", {}).get("mediaGenerationStatus")
+                elif "mediaStatus" in operation:
+                    status = operation["mediaStatus"].get("mediaGenerationStatus")
+                else:
+                    status = operation.get("status")
 
                 # 状态更新 - 每20秒报告一次 (poll_interval=3秒, 20秒约7次轮询)
                 progress_update_interval = 7  # 每7次轮询 = 21秒
@@ -375,9 +404,18 @@ class GenerationVideoMixin:
                 # 检查状态
                 if status == "MEDIA_GENERATION_STATUS_SUCCESSFUL":
                     # 成功
-                    metadata = operation["operation"].get("metadata", {})
+                    if "operation" in operation:
+                        metadata = operation["operation"].get("metadata", {})
+                    elif "mediaMetadata" in operation:
+                        metadata = operation["mediaMetadata"]
+                    else:
+                        metadata = operation
+                        
                     video_info = metadata.get("video", {})
-                    video_url = video_info.get("fifeUrl")
+                    if "generatedVideo" in video_info:
+                        video_info = video_info["generatedVideo"]
+                    
+                    video_url = metadata.get("video", {}).get("fifeUrl") or video_info.get("fifeUrl")
                     # Extract short UUID from Google Storage URL (e.g., /video/UUID?)
                     # Both extend API and concat API need this short UUID format,
                     # NOT the CAUS base64 mediaGenerationId from video_info
@@ -594,7 +632,7 @@ class GenerationVideoMixin:
                 debug_logger.log_error(f"Poll error: {str(e)}")
                 if consecutive_poll_errors >= max_consecutive_poll_errors:
                     error_msg = f"视频状态查询失败: {self._normalize_error_message(e)}"
-                    await self._fail_video_task(operations, error_msg)
+                    await self._fail_video_task(tracking_items, error_msg)
                     self._mark_generation_failed(generation_result, error_msg)
                     if stream:
                         yield self._create_stream_chunk(f"❌ {error_msg}\n")
@@ -607,7 +645,7 @@ class GenerationVideoMixin:
             error_msg = f"视频状态查询持续失败: {self._normalize_error_message(last_poll_error)}"
         else:
             error_msg = f"视频生成超时 (已轮询 {max_attempts} 次)"
-        await self._fail_video_task(operations, error_msg)
+        await self._fail_video_task(tracking_items, error_msg)
         self._mark_generation_failed(generation_result, error_msg)
         yield self._create_error_response(error_msg, status_code=504)
 

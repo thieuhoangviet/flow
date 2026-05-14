@@ -484,8 +484,9 @@ def _build_personal_browser_args(
         # Stealth hidden: chạy headed nhưng ẩn cửa sổ hoàn toàn
         # KHÔNG dùng --headless/--no-startup-window để tránh HeadlessChrome UA
         # Google reCAPTCHA sẽ reject nếu phát hiện HeadlessChrome
-        browser_args.append('--window-position=-32000,-32000')
-        browser_args.append('--window-size=1,1')
+        # Vẫn giữ nguyên kích thước và vị trí bình thường để tránh BotGuard phát hiện
+        browser_args.append('--window-position=40,40')
+        browser_args.append('--window-size=1280,720')
     else:
         browser_args.append('--window-position=80,80')
 

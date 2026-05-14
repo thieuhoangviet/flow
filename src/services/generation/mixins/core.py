@@ -3,7 +3,7 @@ import base64
 import json
 import time
 from pathlib import Path
-from typing import Optional, AsyncGenerator, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, AsyncGenerator, List, Dict, Any
 from src.core.logger import debug_logger
 from src.core.config import config
 from src.core.monitoring import record_generation_result
@@ -18,8 +18,12 @@ from src.core.account_tiers import (
 from src.services.file_cache import FileCache
 
 from src.services.generation.utils import MODEL_CONFIG, _make_t2v_config, _make_i2v_config, _apply_veo_3_1_model_updates, _known_video_model_keys, _resolve_tier_two_model_key
+from src.services.risk.worker_manager import WorkerManager
 
 class GenerationCoreMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def handle_generation(
         self,
         model: str,
@@ -42,6 +46,8 @@ class GenerationCoreMixin:
         token = None
         generation_type = None
         pending_token_state = {"active": False}
+        risk_worker_manager = WorkerManager(self.db)
+        selected_worker = None
         request_id = f"gen-{int(start_time * 1000)}-{id(asyncio.current_task())}"
         perf_trace: Dict[str, Any] = {
             "request_id": request_id,
@@ -99,24 +105,46 @@ class GenerationCoreMixin:
         debug_logger.log_info(f"[GENERATION] 正在选择可用Token...")
         token_select_started_at = time.time()
 
-        if generation_type == "image":
-            token = await self.load_balancer.select_token(
-                for_image_generation=True,
-                model=model,
-                reserve=False,
-                enforce_concurrency_filter=False,
-                track_pending=True,
-                user_id=user_id,
+        selected_worker = await risk_worker_manager.select_available_worker()
+        if selected_worker:
+            perf_trace["worker_id"] = selected_worker.get("worker_id")
+            perf_trace["worker_token_id"] = selected_worker.get("token_id")
+            debug_logger.log_info(
+                f"[RISK_WORKER] Selected {selected_worker.get('worker_id')} "
+                f"status={selected_worker.get('status')} risk={selected_worker.get('risk_score')}"
             )
+            if stream:
+                yield self._create_stream_chunk(
+                    f"Worker: {selected_worker.get('worker_id')} (risk {selected_worker.get('risk_score', 0)})\n",
+                    role="assistant",
+                )
+            worker_token_id = selected_worker.get("token_id")
+            if worker_token_id:
+                token = await self.db.get_token(worker_token_id)
+                if token and not getattr(token, "is_active", True):
+                    token = None
         else:
-            token = await self.load_balancer.select_token(
-                for_video_generation=True,
-                model=model,
-                reserve=False,
-                enforce_concurrency_filter=False,
-                track_pending=True,
-                user_id=user_id,
-            )
+            debug_logger.log_warning("[RISK_WORKER] No active worker available; falling back to load balancer")
+
+        if not token:
+            if generation_type == "image":
+                token = await self.load_balancer.select_token(
+                    for_image_generation=True,
+                    model=model,
+                    reserve=False,
+                    enforce_concurrency_filter=False,
+                    track_pending=True,
+                    user_id=user_id,
+                )
+            else:
+                token = await self.load_balancer.select_token(
+                    for_video_generation=True,
+                    model=model,
+                    reserve=False,
+                    enforce_concurrency_filter=False,
+                    track_pending=True,
+                    user_id=user_id,
+                )
         perf_trace["token_select_ms"] = int((time.time() - token_select_started_at) * 1000)
 
         if not token:
@@ -150,6 +178,9 @@ class GenerationCoreMixin:
             return
 
         debug_logger.log_info(f"[GENERATION] 已选择Token: {token.id} ({token.email})")
+        if not selected_worker or selected_worker.get("token_id") != token.id:
+            selected_worker = {"worker_id": f"local-token-{token.id}", "token_id": token.id}
+        perf_trace["worker_id"] = selected_worker.get("worker_id")
         pending_token_state["active"] = True
         await self._update_request_log_progress(
             request_log_state,
@@ -177,6 +208,8 @@ class GenerationCoreMixin:
             if not token:
                 error_msg = "Token AT无效或刷新失败"
                 debug_logger.log_error(f"[GENERATION] {error_msg}")
+                if selected_worker and selected_worker.get("worker_id"):
+                    await risk_worker_manager.mark_error(selected_worker["worker_id"], error_msg)
                 record_generation_result(generation_type, "failed", time.time() - start_time)
                 if stream:
                     yield self._create_stream_chunk(f"❌ {error_msg}\n")
@@ -247,6 +280,8 @@ class GenerationCoreMixin:
                 debug_logger.log_warning(f"[GENERATION] 生成未成功，不扣次数: {error_msg}")
                 if token:
                     await self.token_manager.record_error(token.id)
+                    if selected_worker and selected_worker.get("worker_id"):
+                        await risk_worker_manager.mark_error(selected_worker["worker_id"], error_msg)
                 duration = time.time() - start_time
                 record_generation_result(generation_type, "failed", duration)
                 perf_trace["status"] = "failed"
@@ -276,6 +311,8 @@ class GenerationCoreMixin:
 
             # 重置错误计数 (请求成功时清空连续错误计数)
             await self.token_manager.record_success(token.id)
+            if selected_worker and selected_worker.get("worker_id"):
+                await risk_worker_manager.mark_success(selected_worker["worker_id"])
 
             debug_logger.log_info(f"[GENERATION] ✅ 生成成功完成")
 
@@ -355,6 +392,8 @@ class GenerationCoreMixin:
             if token:
                 # 记录错误（所有错误统一处理，不再特殊处理429）
                 await self.token_manager.record_error(token.id)
+                if selected_worker and selected_worker.get("worker_id"):
+                    await risk_worker_manager.mark_error(selected_worker["worker_id"], error_msg)
 
             # 先将最终失败状态落库，再返回错误响应，避免日志停在 102。
             duration = time.time() - start_time

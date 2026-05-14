@@ -3,12 +3,15 @@ import aiosqlite
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, List, Dict, Any
 from pathlib import Path
 from ...config import DEFAULT_YESCAPTCHA_TASK_TYPE, normalize_yescaptcha_task_type
 from ...models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConfig, GenerationConfig, CacheConfig, Project, CaptchaConfig, PluginConfig, CallLogicConfig
 
 class DatabaseConfigMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def get_admin_config(self) -> Optional[AdminConfig]:
         """Get admin configuration"""
         async with self._connect() as db:

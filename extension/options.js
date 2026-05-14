@@ -1,6 +1,6 @@
 const DEFAULT_SETTINGS = {
   serverUrl: "ws://127.0.0.1:8000/captcha_ws",
-  apiKey: "",
+  apiKey: "admin-5zOVZYmBabsldj03O2oXCfiJMzgjItiwB4q384QJQCs",
   routeKey: "",
   clientLabel: ""
 };

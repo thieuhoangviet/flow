@@ -3,12 +3,15 @@ import aiosqlite
 import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Optional, List, Dict, Any
 from pathlib import Path
 from ...config import DEFAULT_YESCAPTCHA_TASK_TYPE, normalize_yescaptcha_task_type
 from ...models import Token, TokenStats, Task, RequestLog, AdminConfig, ProxyConfig, GenerationConfig, CacheConfig, Project, CaptchaConfig, PluginConfig, CallLogicConfig
 
 class DatabaseLogsMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def add_request_log(self, log: RequestLog) -> int:
         """Add request log and return log id"""
         async with self._connect(write=True) as db:

@@ -54,7 +54,7 @@ def resolve_effective_personal_max_resident_tabs(value) -> int:
         current = 1
     return current
 
-PERSONAL_COOKIE_PREBIND_URL = "about:blank"
+PERSONAL_COOKIE_PREBIND_URL = "https://labs.google/"
 PERSONAL_LABS_BOOTSTRAP_URL = "https://labs.google/fx/api/auth/providers"
 PERSONAL_COOKIE_TARGET_URLS = (
     "https://labs.google/",

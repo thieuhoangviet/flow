@@ -6,7 +6,7 @@ import uuid
 import random
 import base64
 import ssl
-from typing import Dict, Any, Optional, List, Union, Callable, Awaitable
+from typing import TYPE_CHECKING, Any, Dict, Any, Optional, List, Union, Callable, Awaitable
 from urllib.parse import quote
 import urllib.error
 import urllib.request
@@ -19,6 +19,9 @@ except ImportError:
     pass
 
 class FlowClientAuthMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def st_to_at(self, st: str) -> dict:
         """ST转AT
 
@@ -124,7 +127,7 @@ class FlowClientAuthMixin:
                 pass
         elif config.captcha_method == "extension":
             try:
-                from .browser_captcha_extension import ExtensionCaptchaService
+                from ...browser_captcha_extension import ExtensionCaptchaService
                 service = await ExtensionCaptchaService.get_instance()
                 await service.report_flow_error(
                     project_id=project_id,
@@ -431,7 +434,7 @@ class FlowClientAuthMixin:
 
         if captcha_method == "extension":
             try:
-                from .browser_captcha_extension import ExtensionCaptchaService
+                from ...browser_captcha_extension import ExtensionCaptchaService
                 service = await ExtensionCaptchaService.get_instance(self.db)
                 extension_timeout = 45 if action == "VIDEO_GENERATION" else 25
                 token = await service.get_token(
@@ -570,9 +573,8 @@ class FlowClientAuthMixin:
         if method == "yescaptcha":
             client_key = config.yescaptcha_api_key
             base_url = config.yescaptcha_base_url
-            # Google Labs uses reCAPTCHA Enterprise — prefer Enterprise task type
-            task_type = "RecaptchaV3EnterpriseTask"
-            min_score = None
+            task_type = config.yescaptcha_task_type or "RecaptchaV3TaskProxylessM1"
+            min_score = get_yescaptcha_min_score(task_type)
         elif method == "capmonster":
             client_key = config.capmonster_api_key
             base_url = config.capmonster_base_url
@@ -629,8 +631,13 @@ class FlowClientAuthMixin:
                         "pageAction": page_action
                     }
                 }
+                if "Enterprise" in task_type or "autocaptcha" in base_url:
+                    create_data["task"]["isEnterprise"] = True
+                    
                 if min_score is not None:
                     create_data["task"]["minScore"] = min_score
+                elif "autocaptcha" in base_url:
+                    create_data["task"]["minScore"] = 0.9
 
                 if proxy:
                     result = await session.post(create_url, json=create_data, impersonate="chrome124", proxy=proxy)

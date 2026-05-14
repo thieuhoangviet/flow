@@ -56,12 +56,17 @@ def resolve_effective_personal_max_resident_tabs(value) -> int:
 
 from .constants import *
 from .utils import *
+from .utils import _get_recaptcha_script_cache_dir, _get_recaptcha_asset_cache_dir
 from .models import *
 from .mixins.lifecycle import BrowserLifecycleMixin
 from .mixins.tabs import BrowserTabsMixin
 from .mixins.fingerprint import BrowserFingerprintMixin
 from .mixins.session import BrowserSessionMixin
 from .mixins.solver import BrowserSolverMixin
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .pool_service import _PersonalBrowserPoolService
 
 class BrowserCaptchaService(
     BrowserLifecycleMixin,

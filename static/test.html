@@ -467,6 +467,21 @@ async function generate() {
 
   const log = document.getElementById("outputLog");
   const appendLog = (text) => { log.textContent += text; log.scrollTop = log.scrollHeight; };
+  const authHeaders = { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  let jobId = null;
+
+  const updateJob = async (patch) => {
+    if (!jobId) return;
+    try {
+      await fetch(`${baseUrl}/api/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: authHeaders,
+        body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      console.warn("Không cập nhật được job:", e);
+    }
+  };
 
   // Build messages
   const content = [];
@@ -476,7 +491,6 @@ async function generate() {
   });
 
   const messages = [{ role: "user", content: content.length === 1 ? prompt : content }];
-
   const body = { model: STATE.selectedModel, messages, stream: true };
 
   const startTime = Date.now();
@@ -485,9 +499,23 @@ async function generate() {
   appendLog(`[${new Date().toLocaleTimeString()}] Bắt đầu gửi yêu cầu...\n`);
 
   try {
+    const jobResp = await fetch(`${baseUrl}/api/jobs`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ model: STATE.selectedModel, prompt, mode: STATE.modelConfig?.type || "manual" }),
+    });
+    if (jobResp.ok) {
+      const job = await jobResp.json();
+      jobId = job.job_id;
+      localStorage.setItem("flow2api:lastJobId", jobId);
+      appendLog(`[${new Date().toLocaleTimeString()}] Job ID: ${jobId}\n`);
+      await updateJob({ status: "initializing", stage: "initializing", progress: 5, log_text: log.textContent });
+    }
+
+    await updateJob({ status: "processing", stage: "captcha", progress: 20, log_text: log.textContent });
     const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: authHeaders,
       body: JSON.stringify(body),
     });
 
@@ -496,6 +524,7 @@ async function generate() {
       throw new Error(`HTTP ${resp.status}: ${errText}`);
     }
 
+    await updateJob({ status: "processing", stage: "streaming", progress: 45, log_text: log.textContent });
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let fullContent = "";
@@ -538,13 +567,22 @@ async function generate() {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     appendLog(`\n\n[${new Date().toLocaleTimeString()}] Hoàn thành, thời gian: ${elapsed}s\n`);
 
-    // Render result
     renderResult(fullContent);
+    const mediaUrls = extractMediaUrls(fullContent);
+    await updateJob({
+      status: "completed",
+      stage: "completed",
+      progress: 100,
+      result_json: { content: fullContent, elapsed_seconds: Number(elapsed) },
+      media_urls: mediaUrls,
+      log_text: log.textContent,
+    });
     dot.className = "status-dot status-done";
     document.getElementById("statusText").textContent = `Hoàn thành (${elapsed}s)`;
 
   } catch (e) {
     appendLog(`\n❌ Yêu cầu thất bại: ${e.message}\n`);
+    await updateJob({ status: "failed", stage: "failed", progress: 100, error_message: e.message, log_text: log.textContent });
     dot.className = "status-dot status-error";
     document.getElementById("statusText").textContent = "Thất bại";
   } finally {
@@ -553,6 +591,44 @@ async function generate() {
     const meta = STATE.modelConfig;
     btn.textContent = meta && meta.type === "image" ? "🎨 Tạo ảnh" : "🎬 Tạo video";
   }
+}
+
+async function downloadGeneratedMedia(url, filename) {
+  try {
+    const link = document.createElement("a");
+    link.download = filename;
+
+    if (url.startsWith("data:") || url.startsWith("blob:")) {
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+
+    const absoluteUrl = new URL(url, window.location.origin).href;
+    const resp = await fetch(absoluteUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+  } catch (e) {
+    console.warn("Client download failed, fallback to server download:", e);
+    window.open(`/api/download?file=${encodeURIComponent(url)}&name=${encodeURIComponent(filename)}`, "_blank");
+  }
+}
+
+function createDownloadButton(url, filename, label) {
+  const dlBtn = document.createElement("button");
+  dlBtn.type = "button";
+  dlBtn.textContent = label;
+  dlBtn.style.cssText = "display:block;margin-top:8px;padding:8px 16px;background:#7c8aff;color:#fff;border:0;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;text-align:center;max-width:200px;cursor:pointer;";
+  dlBtn.onclick = () => downloadGeneratedMedia(url, filename);
+  return dlBtn;
 }
 
 function renderResult(content) {
@@ -573,12 +649,7 @@ function renderResult(content) {
     img.loading = "lazy";
     wrapper.appendChild(img);
     
-    const dlBtn = document.createElement("a");
-    dlBtn.href = "/api/download?file=" + encodeURIComponent(imgUrl) + "&name=image_" + Date.now() + ".jpg";
-    dlBtn.textContent = "📥 Tải ảnh";
-    dlBtn.style.cssText = "display:block;margin-top:8px;padding:8px 16px;background:#7c8aff;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;text-align:center;max-width:200px;";
-    wrapper.appendChild(dlBtn);
-    
+    wrapper.appendChild(createDownloadButton(imgUrl, `image_${Date.now()}.jpg`, "📥 Tải ảnh"));
     resultDiv.appendChild(wrapper);
   }
 
@@ -594,11 +665,7 @@ function renderResult(content) {
     video.autoplay = true;
     video.loop = true;
     wrapper.appendChild(video);
-    const dlBtn = document.createElement("a");
-    dlBtn.href = "/api/download?file=" + encodeURIComponent(videoUrl) + "&name=video_" + Date.now() + ".mp4";
-    dlBtn.textContent = "📥 Tải video (.mp4)";
-    dlBtn.style.cssText = "display:block;margin-top:8px;padding:8px 16px;background:#7c8aff;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;text-align:center;max-width:200px;";
-    wrapper.appendChild(dlBtn);
+    wrapper.appendChild(createDownloadButton(videoUrl, `video_${Date.now()}.mp4`, "📥 Tải video (.mp4)"));
     resultDiv.appendChild(wrapper);
   }
 
@@ -608,6 +675,46 @@ function renderResult(content) {
     pre.style.cssText = "color:#aaa;font-size:13px;white-space:pre-wrap;word-break:break-all;";
     pre.textContent = content;
     resultDiv.appendChild(pre);
+  }
+}
+
+function extractMediaUrls(content) {
+  const urls = [];
+  let match;
+  const imgRegex = /!\[.*?\]\((.*?)\)/g;
+  while ((match = imgRegex.exec(content)) !== null) urls.push(match[1]);
+  const videoRegex = /<video[^>]+src=['"]([^'"]+)['"]/gi;
+  while ((match = videoRegex.exec(content)) !== null) urls.push(match[1]);
+  return urls;
+}
+
+async function restoreLastJob() {
+  const jobId = localStorage.getItem("flow2api:lastJobId");
+  const baseUrl = (document.getElementById("baseUrl").value || window.location.origin).trim();
+  const apiKey = (document.getElementById("apiKey").value || "").trim();
+  if (!jobId || !apiKey) return;
+  try {
+    const resp = await fetch(`${baseUrl}/api/jobs/${jobId}`, {
+      headers: { "Authorization": `Bearer ${apiKey}` },
+    });
+    if (!resp.ok) return;
+    const job = await resp.json();
+    const dot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    document.getElementById("outputLog").textContent = job.log_text || `[Khôi phục job] ${job.job_id}\nTrạng thái: ${job.status} / ${job.stage}\n`;
+    if (job.result_json && job.result_json.content) renderResult(job.result_json.content);
+    if (job.status === "completed") {
+      dot.className = "status-dot status-done";
+      statusText.textContent = "Đã khôi phục kết quả gần nhất";
+    } else if (job.status === "failed") {
+      dot.className = "status-dot status-error";
+      statusText.textContent = "Job gần nhất thất bại";
+    } else {
+      dot.className = "status-dot status-running";
+      statusText.textContent = `Job gần nhất: ${job.stage || job.status} (${job.progress || 0}%)`;
+    }
+  } catch (e) {
+    console.warn("Không khôi phục được job gần nhất:", e);
   }
 }
 
@@ -636,7 +743,8 @@ function renderResult(content) {
     }
   }
 
-  loadModels();
+  await loadModels();
+  await restoreLastJob();
 })();
 </script>
 </body>

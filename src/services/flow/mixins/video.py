@@ -6,7 +6,7 @@ import uuid
 import random
 import base64
 import ssl
-from typing import Dict, Any, Optional, List, Union, Callable, Awaitable
+from typing import TYPE_CHECKING, Any, Dict, Any, Optional, List, Union, Callable, Awaitable
 from urllib.parse import quote
 import urllib.error
 import urllib.request
@@ -19,6 +19,9 @@ except ImportError:
     pass
 
 class FlowClientVideoMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _make_video_api_request(
         self,
         url: str,
@@ -28,7 +31,7 @@ class FlowClientVideoMixin:
     ) -> Dict[str, Any]:
         """视频 API 加硬截止，避免 curl_cffi 底层偶发卡住导致整条请求悬挂。"""
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 self._make_request(
                     method="POST",
                     url=url,
@@ -40,6 +43,15 @@ class FlowClientVideoMixin:
                 ),
                 timeout=timeout + 5
             )
+            
+            if not result.get("operations"):
+                from src.core.logger import debug_logger
+                import json as _json
+                debug_logger.log_error(f"[VIDEO API FAILED] URL: {url}")
+                debug_logger.log_error(f"[VIDEO API FAILED] Request JSON: {_json.dumps(json_data, indent=2, ensure_ascii=False)}")
+                debug_logger.log_error(f"[VIDEO API FAILED] Response JSON: {_json.dumps(result, indent=2, ensure_ascii=False)}")
+                
+            return result
         except asyncio.TimeoutError as exc:
             raise Exception(f"Flow video API request timed out after {timeout}s") from exc
 
@@ -995,8 +1007,16 @@ class FlowClientVideoMixin:
         """
         url = f"{self.api_base_url}/video:batchCheckAsyncVideoGenerationStatus"
 
+        # 兼容 workflows 格式：如果传入的是 workflows [{"name": "..."}]，需要转换为 {"operation": {"name": "..."}}
+        formatted_operations = []
+        for op in operations:
+            if "name" in op and "operation" not in op:
+                formatted_operations.append({"operation": {"name": op["name"]}})
+            else:
+                formatted_operations.append(op)
+
         json_data = {
-            "operations": operations
+            "operations": formatted_operations
         }
         max_retries = config.flow_max_retries
         last_error: Optional[Exception] = None
